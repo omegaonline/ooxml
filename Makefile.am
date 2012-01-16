@@ -2,6 +2,8 @@ include @top_srcdir@/m4/ltrc.inc
 
 ACLOCAL_AMFLAGS = -I m4
 
+SUBDIRS = oobase .
+
 EXTRA_DIST = \
 	lgpl3_0.txt
 
@@ -46,6 +48,11 @@ dist-hook:
 .ragel.cpp:
 	$(AM_V_at)$(MKDIR_P) $(@D)
 	$(AM_V_GEN)$(RAGEL) -C -G2 -o $@ $<
+	
+AM_CPPFLAGS = -I@top_srcdir@/oobase/include -I@top_builddir@/oobase/include
+AM_CFLAGS = $(PTHREAD_CFLAGS)
+AM_CXXFLAGS = $(PTHREAD_CFLAGS)
+AM_LDFLAGS = $(PTHREAD_LIBS)
 
 #omegadir = @includedir@/Omega
 #omega_HEADERS = \
@@ -60,16 +67,15 @@ bin_PROGRAMS = ooxml
 ooxml_SOURCES = \
 	src/Tokenizer.h \
 	src/Tokenizer.cpp \
-	src/String.h \
-	src/String.cpp \
+	src/Token.h \
+	src/Token.cpp \
 	src/xml.ragel \
 	src/ooxml.cpp
 		
-#ooxml_la_CXXFLAGS = $(PTHREAD_CFLAGS) $(INCICONV)
-#ooxml_la_LDFLAGS = -module -no-undefined $(PTHREAD_LIBS)
+#ooxml_la_CXXFLAGS = $(INCICONV)
+#ooxml_la_LDFLAGS = -module -no-undefined
 
-ooxml_CXXFLAGS = $(PTHREAD_CFLAGS)
-ooxml_LDFLAGS = $(PTHREAD_LIBS)
+ooxml_LDADD = @top_builddir@/oobase/liboobase.la 
 
 if WIN32
 

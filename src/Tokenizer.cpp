@@ -1,19 +1,38 @@
-
-#include <stdio.h>
-#include <assert.h>
+///////////////////////////////////////////////////////////////////////////////////
+//
+// Copyright (C) 2011 Rick Taylor
+//
+// This file is part of OOXML, the Omega Online XML library.
+//
+// OOXML is free software: you can redistribute it and/or modify
+// it under the terms of the GNU Lesser General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+//
+// OOXML is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU Lesser General Public License for more details.
+//
+// You should have received a copy of the GNU Lesser General Public License
+// along with OOXML.  If not, see <http://www.gnu.org/licenses/>.
+//
+///////////////////////////////////////////////////////////////////////////////////
 
 #include "Tokenizer.h"
 
+#include <OOBase/Memory.h>
+
 Tokenizer::Tokenizer() : 
 		m_stack(NULL), 
-		m_stacksize(0), 
+		m_stacksize(0),
 		m_char('\0')
 {
 }
 
 Tokenizer::~Tokenizer()
 {
-	free(m_stack);
+	OOBase::HeapAllocator::free(m_stack);
 }
 
 void Tokenizer::init()
@@ -28,11 +47,11 @@ void Tokenizer::pre_push()
 	if (!m_stack)
 	{
 		m_stacksize = 256;
-		m_stack = static_cast<int*>(malloc(m_stacksize*sizeof(int)));
+		m_stack = static_cast<int*>(OOBase::HeapAllocator::allocate(m_stacksize*sizeof(int)));
 	}
 	else if (m_top == m_stacksize-1)
 	{
-		int* new_stack = static_cast<int*>(realloc(m_stack,m_stacksize*2*sizeof(int)));
+		int* new_stack = static_cast<int*>(OOBase::HeapAllocator::reallocate(m_stack,m_stacksize*2*sizeof(int)));
 		m_stack = new_stack;
 		m_stacksize *= 2;
 	}
@@ -84,19 +103,24 @@ void Tokenizer::subst_char()
 
 void Tokenizer::subst_hex()
 {
-	printf("CHARREF: '0x");
-	m_entity.dump();
-	printf("'\n");
+	size_t len = 0;
+	unsigned char* b = m_entity.get(&len);
+
+	printf("CHARREF: '0x%.*s'\n",(int)len,b);
 	
 	m_entity.clear();
 }
 
 void Tokenizer::token(const char* s, int offset)
 {
-	printf("%s: '",s);
-	m_output.dump(offset);
-	printf("'\n");
-	
+	size_t len = 0;
+	unsigned char* b = m_output.get(&len);
+
+	if ((size_t)(-offset) > len)
+		offset = 0;
+
+	printf("%s: '%.*s'\n",s,(int)len + offset,b);
+
 	m_output.clear();
 }
 
@@ -105,6 +129,4 @@ void Tokenizer::next_token()
 	do_exec();
 	
 	printf("State: %u\n",m_cs);
-	
-	
 }

@@ -30,84 +30,150 @@
 	action append { m_output.push(m_char); }
 	action entity { m_entity.push(m_char); }
 	
-	Char         =    any;  # Prevalidated!
-	S            =    (0x20 | 0x9 | 0xD | 0xA)+;
-	Eq           =    S? '=' S?;
-	#VersionNum   =    '1.' [0-9]+;
-	#VersionInfo  =    S 'version' Eq ("'" VersionNum "'" | '"' VersionNum '"');
-	VersionInfo  =    S 'version' Eq ("'1.0'" | '"1.0"');
-	EncName      =    [A-Za-z] ([A-Za-z0-9._] | '-')*;
-	EncodingDecl =    S 'encoding' Eq ('"' EncName '"' | "'" EncName "'" );
-	SDDecl       =    S 'standalone' Eq (("'" ('yes' | 'no') "'") | ('"' ('yes' | 'no') '"'));
-	XMLDecl      =    '<?xml' VersionInfo EncodingDecl? SDDecl? S? '?>';
-	Comment      =    '<!--' (Char* -- '--') '-->';
-	NameStartChar =   ":" | [A-Z] | "_" | [a-z];          # | [#xC0-#xD6] | [#xD8-#xF6] | [#xF8-#x2FF] | [#x370-#x37D] | [#x37F-#x1FFF] | [#x200C-#x200D] | [#x2070-#x218F] | [#x2C00-#x2FEF] | [#x3001-#xD7FF] | [#xF900-#xFDCF] | [#xFDF0-#xFFFD] | [#x10000-#xEFFFF] 
-	NameChar     =    NameStartChar | "-" | "." | [0-9];  # | #xB7 | [#x0300-#x036F] | [#x203F-#x2040] 
-	Name         =    (NameStartChar (NameChar)*) $append;
-	PITarget     =    Name - (('X' | 'x') ('M' | 'm') ('L' | 'l'));
-	PI           =    '<?' PITarget (S (Char* -- '?>'))? $append '?>' @{token("pi",-1);};
-	Misc         =    Comment | PI | S;
-	SystemLiteral =   ('"' [^"]* '"') | ("'" [^']* "'");
-	PubidChar    =    0x20 | 0xD | 0xA | [a-zA-Z0-9] | "-" | ['()+,./:=?;!*#@$_%];
-	PubidLiteral =    '"' PubidChar* '"' | "'" (PubidChar - "'")* "'";
-	ExternalID   =    'SYSTEM' S SystemLiteral | 'PUBLIC' S PubidLiteral S SystemLiteral;
-	Mixed        =    '(' S? '#PCDATA' (S? '|' S? Name)* S? ')*' | '(' S? '#PCDATA' S? ')';
-	StringType   =    'CDATA';
+	# UTF-8 validation
+	utf8_cont = 0x80..0xBF;
+
+    utf8_one_byte = 0x00..0x7F;
+
+    utf8_two_byte_basic      = (0xC0..0xDF) utf8_cont;
+    utf8_two_byte_overlong   = (0xC0..0xC1) utf8_cont;
+    utf8_two_byte            = utf8_two_byte_basic - utf8_two_byte_overlong;
+
+    utf8_three_byte_basic    = (0xE0..0xEF) utf8_cont{2};
+    utf8_three_byte_overlong = 0xE0 (0x80..0x9F) utf8_cont;
+    utf8_three_byte_reserved = 0xED (0xA0..0xBF) utf8_cont;  # U+D800 to U+DFFF
+    utf8_three_byte          = utf8_three_byte_basic - utf8_three_byte_overlong - utf8_three_byte_reserved;
+
+    utf8_four_byte_basic     = (0xF0..0xF4) utf8_cont{3};
+    utf8_four_byte_overlong  = 0xF0 (0x80..0x8F) utf8_cont{2};
+    utf8_four_byte_reserved  = 0xF4 (0x90..0xBF) utf8_cont{2};    # > U+10FFFF
+    utf8_four_byte           = utf8_four_byte_basic - utf8_four_byte_overlong - utf8_four_byte_reserved;
+    utf8_char                = (utf8_one_byte | utf8_two_byte | utf8_three_byte | utf8_four_byte);
+	
+	BOM           =    0x00 0x00 0xFE 0xFF
+	                   | 0xFF 0xFE (0x00 0x00)?
+	                   | 0xFE 0xFF
+	                   | 0xEF 0xBB 0xBF;
+
+	XMLPart       =    0x00 0x00 0x00 0x3C @{encoding("UTF-32LE");} '?xml'   
+	                   | 0x3C 0x00 0x00 0x00 @{encoding("UTF-32BE");} '?xml'
+	                   | 0x00 0x3C 0x00 0x03F @{encoding("UTF-16BE");} 'xml'
+	                   | 0x3C 0x00 0x03F 0x00 @{encoding("UTF-16LE");} 'xml'
+	                   | 0x4C 0x6F 0x0A7 0x94 @{encoding("EBCDIC-US");} 'l'
+	                   | '<?xml';
+
+	Char          =    utf8_char - ((0x00..0x08) | 0x0B | 0x0C | (0x0E..0x1F));  
+	S             =    (0x20 | 0x9 | 0xD | 0xA)+;
+	Eq            =    S? '=' S?;
+	VersionNum    =    ('1.' [0-9]+) $append %{token("document.version");};
+	VersionInfo   =    S 'version' Eq ("'" VersionNum "'" | '"' VersionNum '"');
+	EncName       =    [a-zA-Z] ([a-zA-Z0-9._] | '-')* $append;
+	EncodingDecl  =    S 'encoding' Eq ('"' EncName '"' | "'" EncName "'" ) @{encoding(NULL); token("document.encoding");};
+	SDDecl        =    S 'standalone' Eq (("'" ('yes' @{token("document.standalone");} | 'no') "'") | ('"' ('yes' @{token("document.standalone");} | 'no') '"'));
+		                   	
+	XMLDecl       =    XMLPart VersionInfo EncodingDecl? SDDecl? S? '?>';
+	
+	Comment       =    '<!--' (Char* -- '--') $append %{token("comment.data");} '-->';
+	
+	NameStartChar =    [a-zA-Z:_]
+	                   | 0xC3 (utf8_cont - (0x97 | 0xB7))                          # [#xC0-#xD6] | [#xD8-#xF6] | [#xF8-#xFF]
+	                   | (0xC4..0xCB) utf8_cont                                    # [#x100-#x2FF]
+	                   | 0xCD (0xB0..0xBD | 0xBF)                                  # [#x370-#x37D]
+	                   | (0xCE..0xDF) utf8_cont                                    # [#x37F-#x7FF]
+	                   | (((0xE0..0xE1) utf8_cont{2} ) - utf8_three_byte_overlong) # [#x800-#x1FFF]
+	                   | 0xE2 0x80 (0x8C | 0x8D)                                   # [#x200C-#x200D]
+	                   | 0xE2 (0x81 (0xB0..0xBF) | (0x82..0x88) utf8_cont | 0x89 (0x80..0x8F)) # [#x2070-#x218F]
+	                   | 0xE2 ((0xB0..0xBE) utf8_cont | 0xBF (0x80..0xAF))         # [#x2C00-#x2FEF]
+	                   | 0xE3 (0x80 (0x81..0xBF) | (0x81..0xBF) utf8_cont)         # [#x3001-#x3FFF]
+	                   | (0xE4..0xEC) utf8_cont{2} | 0xED (0x80..0x9F) utf8_cont   # [#x4000-#xD7FF]
+	                   | 0xEF ((0xA4..0xB6) utf8_cont | 0xB7 (0x80..0x87))         # [#xF900-#xFDCF]
+	                   | 0xEF (0xB7 (0xB0..0xBF) | (0xB8..0xBF) utf8_cont)         # [#xFDF0-#xFFFD]
+	                   | utf8_four_byte;                                            # [#x10000-#xEFFFF]
+	 
+	NameChar      =    NameStartChar | "-" | "." | [0-9]
+	                   | 0xC2 0xB7                          #  #xB7
+	                   | 0xCC utf8_cont | 0xCD (0x80..0xAF) # [#x0300-#x036F]
+	                   | 0xE2 (0x80 0xBF | 0x81 0x80);      # [#x203F-#x2040]
+		  
+	Name          =    NameStartChar (NameChar)*;
+	NCName        =    (Name -- ':');
+	
+	LocalPart     =    NCName;
+	Prefix        =    NCName;
+	UnprefixedName =   LocalPart;
+	PrefixedName  =    Prefix ':' LocalPart;
+	QName         =    PrefixedName | UnprefixedName;
+	
+	PrefixedAttName =  'xmlns:' NCName;
+	DefaultAttName =   'xmlns';
+	NSAttName     =    PrefixedAttName | DefaultAttName;
+	
+	PITarget      =    Name - (('X' | 'x') ('M' | 'm') ('L' | 'l'));
+	PI            =    '<?' PITarget $append %{token("pi.target");} (S (Char* -- '?>') $append %{token("pi.data");} )? '?>';
+	
+	Misc          =    Comment | PI | S;
+	
+	SystemLiteral =    ('"' [^"]* $append %{token("doctype.systemId");} '"') | ("'" [^']* $append %{token("doctype.systemId");} "'");
+	PubidChar     =    0x20 | 0xD | 0xA | [a-zA-Z0-9] | '-' | ['()+,./:=?;!*#@$_%];
+	PubidLiteral  =    '"' PubidChar* $append %{token("doctype.publicId");} '"' | "'" (PubidChar - "'")* $append %{token("doctype.publicId");} "'";
+	ExternalID    =    'SYSTEM' S SystemLiteral | 'PUBLIC' S PubidLiteral S SystemLiteral;
+	Mixed         =    '(' S? '#PCDATA' (S? '|' S? QName)* S? ')*' | '(' S? '#PCDATA' S? ')';
+	StringType    =    'CDATA';
 	TokenizedType =    'ID' | 'IDREF' | 'IDREFS' | 'ENTITY' | 'ENTITIES' | 'NMTOKEN' | 'NMTOKENS';
-	NotationType =    'NOTATION' S '(' S? Name (S? '|' S? Name)* S? ')';
-	Nmtoken      =    (NameChar)+;
-	Enumeration  =    '(' S? Nmtoken (S? '|' S? Nmtoken)* S? ')';
-	EnumeratedType =  NotationType | Enumeration;
-	AttType      =    StringType | TokenizedType | EnumeratedType;
-	EntityRef    =    '&' (NameStartChar (NameChar)*) $entity ';' @{subst_entity();};
-	CharRef      =    '&#' [0-9]+ $entity ';' @{subst_char();} | '&#x' [0-9a-fA-F]+ $entity ';' @{subst_hex();};
-	Reference    =    EntityRef | CharRef;
-	AttValue     =    ('"' ([^<&"] $append | Reference)*  '"' | "'" ([^<&'] $append | Reference)* "'") @{token("attr_value");};
-	DefaultDecl  =    '#REQUIRED' | '#IMPLIED' | (('#FIXED' S)? AttValue);
-	AttDef       =    S Name S AttType S DefaultDecl;
-	AttlistDecl  =    '<!ATTLIST' S Name AttDef* S? '>';
-	PEReference  =    '%' Name ';';
-	EntityValue  =    '"' ([^%&"] | PEReference | Reference)* '"' |  "'" ([^%&'] | PEReference | Reference)* "'";
-	NDataDecl    =    S 'NDATA' S Name;
-	EntityDef    =    EntityValue | (ExternalID NDataDecl?);
-	GEDecl       =    '<!ENTITY' S Name S EntityDef S? '>';
-	PEDef        =    EntityValue | ExternalID;
-	PEDecl       =    '<!ENTITY' S '%' S Name S PEDef S? '>';
-	EntityDecl   =    GEDecl | PEDecl;
-	PublicID     =    'PUBLIC' S PubidLiteral;
-	NotationDecl =    '<!NOTATION' S Name S (ExternalID | PublicID) S? '>';
-	DeclSep      =    PEReference | S;
-	Attribute    =    Name %{token("attr_name");} Eq AttValue;
-	CharData     =    ([^<&]* -- ']]>') $append %{token("text");};
-	CDStart      =    '<![CDATA[';
-	CData        =    (Char* -- ']]>');
-	CDEnd        =    ']]>';
-	CDSect       =    CDStart CData CDEnd;
-			
+	NotationType  =    'NOTATION' S '(' S? Name (S? '|' S? Name)* S? ')';
+	Nmtoken       =    (NameChar)+;
+	Enumeration   =    '(' S? Nmtoken (S? '|' S? Nmtoken)* S? ')';
+	EnumeratedType =   NotationType | Enumeration;
+	AttType       =    StringType | TokenizedType | EnumeratedType;
+	
+	EntityRef     =    '&' (NameStartChar (NameChar)*) $entity ';' @{subst_entity();};
+	CharRef       =    '&#' [0-9]+ $entity ';' @{subst_char();} | '&#x' [0-9a-fA-F]+ $entity ';' @{subst_hex();};
+	Reference     =    EntityRef | CharRef;
+	
+	DeclAttValue  =    '"' ([^<&"] | Reference)*  '"' | "'" ([^<&'] | Reference)* "'";
+	DefaultDecl   =    '#REQUIRED' | '#IMPLIED' | (('#FIXED' S)? DeclAttValue);
+	AttDef        =    S (QName | NSAttName) S AttType S DefaultDecl;
+	AttlistDecl   =    '<!ATTLIST' S QName AttDef* S? '>';
+	PEReference   =    '%' Name ';';
+	EntityValue   =    '"' ([^%&"] | PEReference | Reference)* '"' |  "'" ([^%&'] | PEReference | Reference)* "'";
+	NDataDecl     =    S 'NDATA' S Name;
+	EntityDef     =    EntityValue | (ExternalID NDataDecl?);
+	GEDecl        =    '<!ENTITY' S Name $append S EntityDef S? '>';
+	PEDef         =    EntityValue | ExternalID;
+	PEDecl        =    '<!ENTITY' S '%' S Name S PEDef S? '>';
+	EntityDecl    =    GEDecl | PEDecl;
+	PublicID      =    'PUBLIC' S PubidLiteral;
+	NotationDecl  =    '<!NOTATION' S Name S (ExternalID | PublicID) S? '>';
+	DeclSep       =    PEReference | S;   
+	
+	AttValue      =    ('"' ([^<&"] $append | Reference)*  '"' | "'" ([^<&'] $append | Reference)* "'") @{token("attribute.value");};
+	Attribute     =    (NSAttName | QName) $append Eq @{token("attribute.name");} AttValue;
+	
+	CharData      =    ([^<&]* -- ']]>') $append %{token("text");};
+	
+	CDSect        =    '<![CDATA[' (Char* -- ']]>') ']]>';
+		 	
 	action choice_point { fcall ch_or_seq1; }
-	ch_or_seq    =    '(' @choice_point;
-	cp           =    (Name | ch_or_seq) ('?' | '*' | '+')?;
-	choice       =    S? cp ( S? '|' S? cp )+ S?;
-	seq          =    S? cp ( S? ',' S? cp )* S?;	
-	ch_or_seq1  :=    (choice | seq) ')' @return;
-	children     =    ch_or_seq ('?' | '*' | '+')?;
+	ch_or_seq     =    '(' @choice_point;
+	cp            =    (QName | ch_or_seq) ('?' | '*' | '+')?;
+	choice        =    S? cp ( S? '|' S? cp )+ S?;
+	seq           =    S? cp ( S? ',' S? cp )* S?;	
+	ch_or_seq1   :=    (choice | seq) ')' @return;
+	children      =    ch_or_seq ('?' | '*' | '+')?;
 		
-	contentspec  =    'EMPTY' | 'ANY' | Mixed | children;
-	elementdecl  =    '<!ELEMENT' S Name S contentspec S? '>';
-	markupdecl   =    elementdecl | AttlistDecl | EntityDecl | NotationDecl | PI | Comment ;
-	intSubset    =    (markupdecl | DeclSep)*;
+	contentspec   =    'EMPTY' | 'ANY' | Mixed | children;
+	elementdecl   =    '<!ELEMENT' S QName S contentspec S? '>';
+	markupdecl    =    elementdecl | AttlistDecl | EntityDecl | NotationDecl | PI | Comment ;
+	intSubset     =    (markupdecl | DeclSep)*;
 	
-	action content { fcall content_1; }
-	action element_name { token("element_name"); }
-	EmptyElemTag =    '<' Name %element_name (S Attribute)* S? '/>' @{token("empty element");};
-	STag         =    '<' Name %element_name (S Attribute)* S? '>';
-	ETag         =    '</' Name %{token("end element");} S? '>';
-	element      =    EmptyElemTag | STag @content;
-	content_1   :=    CharData? ((element | Reference | CDSect | PI | Comment) CharData?)* ETag @return;
+	ETag          =    '</' QName $append %{token("element.end");} S? '>';
+	EStart        =    '<' QName $append %{token("element.start");} (S Attribute)* S?;
+	element       =    EStart ('/>' @{token("element.end");} | '>' @{ fcall content_1; } );
+	content_1    :=    CharData? ((element | Reference | CDSect | PI | Comment) CharData?)* ETag @return;
 	
-	doctypedecl  =    '<!DOCTYPE' S Name (S ExternalID)? S? ('[' intSubset ']' S?)? '>';
-	prolog       =    XMLDecl? Misc* (doctypedecl Misc*)?;
-	document     =    prolog element Misc*;	
+	doctypedecl   =    '<!DOCTYPE' S QName $append %{token("doctype.start");} (S ExternalID)? S? ('[' intSubset ']' S?)? '>' @{token("doctype.end");};
+	prolog        =    BOM? XMLDecl? Misc* (doctypedecl Misc*)?;
+	document      =    prolog element Misc*;	
  
 	main := document;
 }%%
@@ -126,10 +192,7 @@ bool Tokenizer::do_exec()
 	static const unsigned char pe = '\0';
 	Tokenizer& p = *this;
 	
-	//while (p != pe && m_cs != %%{ write error; }%% )
-	{
-		%% write exec;
-	}
-	
+	%% write exec;
+		
 	return (m_cs != %%{ write error; }%%);
 }

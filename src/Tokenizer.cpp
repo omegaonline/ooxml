@@ -84,11 +84,56 @@ void Tokenizer::next_char()
 	m_char = c;
 }
 
+void Tokenizer::general_entity()
+{
+	size_t val_len = 0;
+	unsigned char* val = m_token.copy(val_len);
+
+	if (val_len)
+	{
+		// Internal general entity
+	}
+	else
+	{
+		// External general entity
+		size_t ndata_len = 0;
+		unsigned char* ndata = m_entity.copy(ndata_len);
+		if (ndata_len)
+		{
+			// Unparsed entity
+		}
+		else
+		{
+			// External parsed entity
+		}
+	}
+}
+
+void Tokenizer::param_entity()
+{
+	size_t val_len = 0;
+	unsigned char* val = m_token.copy(val_len);
+
+	if (val_len)
+	{
+		// Internal parameter entity
+	}
+	else
+	{
+		// External parameter entity
+	}
+}
+
 void Tokenizer::subst_entity()
 {
-	printf("Entity!\n");
-	
-	m_entity.clear();
+	size_t len = 0;
+	unsigned char* val = m_entity.copy(len);
+
+	char szBuf[128] = {0};
+	sprintf(szBuf,"&%.*s;",(int)len,val);
+
+	for (size_t i=0;szBuf[i] != '\0';++i)
+		m_token.push(szBuf[i]);
 }
 
 void Tokenizer::subst_char()
@@ -97,36 +142,33 @@ void Tokenizer::subst_char()
 	//m_entity.dump();
 	//printf("'\n");
 	
-	m_entity.clear();
-	m_output.push('1');
+	size_t len = 0;
+	unsigned char* val = m_entity.copy(len);
+
+	m_token.push('1');
 }
 
 void Tokenizer::subst_hex()
 {
 	size_t len = 0;
-	unsigned char* b = m_entity.get(&len);
+	unsigned char* val = m_entity.copy(len);
 
-	printf("CHARREF: '0x%.*s'\n",(int)len,b);
-	
-	m_entity.clear();
+	printf("CHARREF: '0x%.*s'\n",(int)len,val);
 }
 
-void Tokenizer::token(const char* s, int offset)
+void Tokenizer::token(const char* s, size_t offset)
 {
 	size_t len = 0;
-	unsigned char* b = m_output.get(&len);
+	unsigned char* tok = m_token.copy(len);
 
-	if ((size_t)(-offset) > len)
-		offset = 0;
-
-	printf("%s: '%.*s'\n",s,(int)len + offset,b);
-
-	m_output.clear();
+	if (len > offset)
+		printf("%s: %.*s\n",s,(int)(len - offset),tok);
+	else
+		printf("%s\n",s);
 }
 
 void Tokenizer::next_token()
 {
-	do_exec();
-	
-	printf("State: %u\n",m_cs);
+	if (!do_exec())
+		printf("FAILED! %d\n",m_cs);
 }

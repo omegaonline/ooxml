@@ -75,10 +75,9 @@ void Token::clear()
 	m_len = 0;
 }
 
-unsigned char* Token::get(size_t* len)
+unsigned char* Token::copy(size_t& len)
 {
-	if (len)
-		*len = m_len;
-
+	len = m_len;
+	m_len = 0;
 	return m_buffer;
 }

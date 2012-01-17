@@ -34,8 +34,7 @@ public:
 	unsigned char pop();
 	void push(unsigned char c);
 	void clear();
-
-	unsigned char* get(size_t* len);
+	unsigned char* copy(size_t& len);
 
 private:
 	Token(const Token&);

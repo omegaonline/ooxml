@@ -43,8 +43,11 @@ private:
 	unsigned char m_char;
 		
 	Token m_input;
-	Token m_output;
+	Token m_token;
+	Token m_entity_name;
 	Token m_entity;
+	Token m_system;
+	Token m_public;
 		
 	// These are the private members used by Ragel
 	Tokenizer& operator ++ ()
@@ -79,8 +82,10 @@ private:
 	unsigned char get_char();
 	unsigned char next_char_i();
 	void next_char();
-	void token(const char* s, int offset = 0);
+	void token(const char* s, size_t offset = 0);
 	
+	void general_entity();
+	void param_entity();
 	void subst_entity();
 	void subst_char();
 	void subst_hex();

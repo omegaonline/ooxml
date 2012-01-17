@@ -27,7 +27,7 @@
 	prepush { pre_push(); }
 	
 	action return { fret; }
-	action append { m_output.push(m_char); }
+	action append { m_token.push(m_char); }
 	action entity { m_entity.push(m_char); }
 	
 	# UTF-8 validation
@@ -66,14 +66,14 @@
 	S             =    (0x20 | 0x9 | 0xD | 0xA)+;
 	Eq            =    S? '=' S?;
 	VersionNum    =    ('1.' [0-9]+) $append %{token("document.version");};
-	VersionInfo   =    S 'version' Eq ("'" VersionNum "'" | '"' VersionNum '"');
-	EncName       =    [a-zA-Z] ([a-zA-Z0-9._] | '-')* $append;
+	VersionInfo   =    S 'version' Eq @{ m_token.clear();} ("'" VersionNum "'" | '"' VersionNum '"');
+	EncName       =    ([a-zA-Z] ([a-zA-Z0-9._] | '-')*) $append;
 	EncodingDecl  =    S 'encoding' Eq ('"' EncName '"' | "'" EncName "'" ) @{encoding(NULL); token("document.encoding");};
 	SDDecl        =    S 'standalone' Eq (("'" ('yes' @{token("document.standalone");} | 'no') "'") | ('"' ('yes' @{token("document.standalone");} | 'no') '"'));
 		                   	
 	XMLDecl       =    XMLPart VersionInfo EncodingDecl? SDDecl? S? '?>';
 	
-	Comment       =    '<!--' (Char* -- '--') $append %{token("comment.data");} '-->';
+	Comment       =    '<!--' (Char* -- '--') $append '-->' @{token("comment.data",1);};
 	
 	NameStartChar =    [a-zA-Z:_]
 	                   | 0xC3 (utf8_cont - (0x97 | 0xB7))                          # [#xC0-#xD6] | [#xD8-#xF6] | [#xF8-#xFF]
@@ -109,13 +109,13 @@
 	NSAttName     =    PrefixedAttName | DefaultAttName;
 	
 	PITarget      =    Name - (('X' | 'x') ('M' | 'm') ('L' | 'l'));
-	PI            =    '<?' PITarget $append %{token("pi.target");} (S (Char* -- '?>') $append %{token("pi.data");} )? '?>';
+	PI            =    '<?' PITarget $append %{token("pi.target");} (S (Char* -- '?>') $append %{token("pi.data",1);} )? '?>';
 	
 	Misc          =    Comment | PI | S;
 	
-	SystemLiteral =    ('"' [^"]* $append %{token("doctype.systemId");} '"') | ("'" [^']* $append %{token("doctype.systemId");} "'");
+	SystemLiteral =    ('"' [^"]* ${m_system.push(m_char);} '"') | ("'" [^']* ${m_system.push(m_char);} "'");
 	PubidChar     =    0x20 | 0xD | 0xA | [a-zA-Z0-9] | '-' | ['()+,./:=?;!*#@$_%];
-	PubidLiteral  =    '"' PubidChar* $append %{token("doctype.publicId");} '"' | "'" (PubidChar - "'")* $append %{token("doctype.publicId");} "'";
+	PubidLiteral  =    '"' PubidChar* ${m_public.push(m_char);} '"' | "'" (PubidChar - "'")* ${m_public.push(m_char);} "'";
 	ExternalID    =    'SYSTEM' S SystemLiteral | 'PUBLIC' S PubidLiteral S SystemLiteral;
 	Mixed         =    '(' S? '#PCDATA' (S? '|' S? QName)* S? ')*' | '(' S? '#PCDATA' S? ')';
 	StringType    =    'CDATA';
@@ -135,12 +135,12 @@
 	AttDef        =    S (QName | NSAttName) S AttType S DefaultDecl;
 	AttlistDecl   =    '<!ATTLIST' S QName AttDef* S? '>';
 	PEReference   =    '%' Name ';';
-	EntityValue   =    '"' ([^%&"] | PEReference | Reference)* '"' |  "'" ([^%&'] | PEReference | Reference)* "'";
-	NDataDecl     =    S 'NDATA' S Name;
+	EntityValue   =    '"' ([^%&"] $append | PEReference | Reference)* '"' |  "'" ([^%&'] $append | PEReference | Reference)* "'";
+	NDataDecl     =    S 'NDATA' S Name $entity;
 	EntityDef     =    EntityValue | (ExternalID NDataDecl?);
-	GEDecl        =    '<!ENTITY' S Name $append S EntityDef S? '>';
+	GEDecl        =    '<!ENTITY' S Name ${m_entity_name.push(m_char);} S EntityDef S? '>' @{general_entity();};
 	PEDef         =    EntityValue | ExternalID;
-	PEDecl        =    '<!ENTITY' S '%' S Name S PEDef S? '>';
+	PEDecl        =    '<!ENTITY' S '%' S Name ${m_entity_name.push(m_char);} S PEDef S? '>' @{param_entity();};
 	EntityDecl    =    GEDecl | PEDecl;
 	PublicID      =    'PUBLIC' S PubidLiteral;
 	NotationDecl  =    '<!NOTATION' S Name S (ExternalID | PublicID) S? '>';
@@ -149,7 +149,8 @@
 	AttValue      =    ('"' ([^<&"] $append | Reference)*  '"' | "'" ([^<&'] $append | Reference)* "'") @{token("attribute.value");};
 	Attribute     =    (NSAttName | QName) $append Eq @{token("attribute.name");} AttValue;
 	
-	CharData      =    ([^<&]* -- ']]>') $append %{token("text");};
+	CharData_1    =    ([^<&]* -- ']]>');
+	CharData      =    (CharData_1? $append (Reference CharData_1? $append)*) %{token("text");};
 	
 	CDSect        =    '<![CDATA[' (Char* -- ']]>') ']]>';
 		 	
@@ -169,7 +170,7 @@
 	ETag          =    '</' QName $append %{token("element.end");} S? '>';
 	EStart        =    '<' QName $append %{token("element.start");} (S Attribute)* S?;
 	element       =    EStart ('/>' @{token("element.end");} | '>' @{ fcall content_1; } );
-	content_1    :=    CharData? ((element | Reference | CDSect | PI | Comment) CharData?)* ETag @return;
+	content_1    :=    CharData ((element | CDSect | PI | Comment) CharData)* ETag @return;
 	
 	doctypedecl   =    '<!DOCTYPE' S QName $append %{token("doctype.start");} (S ExternalID)? S? ('[' intSubset ']' S?)? '>' @{token("doctype.end");};
 	prolog        =    BOM? XMLDecl? Misc* (doctypedecl Misc*)?;

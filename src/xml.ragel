@@ -29,38 +29,30 @@
 	action return { fret; }
 	action append { m_token.push(m_char); }
 	action entity { m_entity.push(m_char); }
+	action entity_name { m_entity.push(m_char); }
 	
 	# UTF-8 validation
 	utf8_cont = 0x80..0xBF;
-
     utf8_one_byte = 0x00..0x7F;
-
     utf8_two_byte_basic      = (0xC0..0xDF) utf8_cont;
     utf8_two_byte_overlong   = (0xC0..0xC1) utf8_cont;
     utf8_two_byte            = utf8_two_byte_basic - utf8_two_byte_overlong;
-
     utf8_three_byte_basic    = (0xE0..0xEF) utf8_cont{2};
     utf8_three_byte_overlong = 0xE0 (0x80..0x9F) utf8_cont;
     utf8_three_byte_reserved = 0xED (0xA0..0xBF) utf8_cont;  # U+D800 to U+DFFF
     utf8_three_byte          = utf8_three_byte_basic - utf8_three_byte_overlong - utf8_three_byte_reserved;
-
     utf8_four_byte_basic     = (0xF0..0xF4) utf8_cont{3};
     utf8_four_byte_overlong  = 0xF0 (0x80..0x8F) utf8_cont{2};
     utf8_four_byte_reserved  = 0xF4 (0x90..0xBF) utf8_cont{2};    # > U+10FFFF
     utf8_four_byte           = utf8_four_byte_basic - utf8_four_byte_overlong - utf8_four_byte_reserved;
     utf8_char                = (utf8_one_byte | utf8_two_byte | utf8_three_byte | utf8_four_byte);
 	
-	BOM           =    0x00 0x00 0xFE 0xFF
-	                   | 0xFF 0xFE (0x00 0x00)?
-	                   | 0xFE 0xFF
-	                   | 0xEF 0xBB 0xBF;
-
-	XMLPart       =    0x00 0x00 0x00 0x3C @{encoding("UTF-32LE");} '?xml'   
-	                   | 0x3C 0x00 0x00 0x00 @{encoding("UTF-32BE");} '?xml'
-	                   | 0x00 0x3C 0x00 0x03F @{encoding("UTF-16BE");} 'xml'
-	                   | 0x3C 0x00 0x03F 0x00 @{encoding("UTF-16LE");} 'xml'
-	                   | 0x4C 0x6F 0x0A7 0x94 @{encoding("EBCDIC-US");} 'l'
-	                   | '<?xml';
+	XMLPart       =    (0xFF 0xFE 0x00 0x00)? 0x00 0x00 0x00 0x3C @{decoder(Decoder::UTF32LE);} '?xml'   
+	                   | (0x00 0x00 0xFE 0xFF)? 0x3C 0x00 0x00 0x00 @{decoder(Decoder::UTF32BE);} '?xml'
+	                   | (0xFE 0xFF)? 0x00 0x3C 0x00 0x03F @{decoder(Decoder::UTF16BE);} 'xml'
+	                   | (0xFF 0xFE)? 0x3C 0x00 0x03F 0x00 @{decoder(Decoder::UTF16LE);} 'xml'
+	                   | 0x4C 0x6F 0x0A7 0x94 @{decoder(Decoder::EBCDIC);} 'l'
+	                   | (0xEF 0xBB 0xBF)? '<?xml';
 
 	Char          =    utf8_char - ((0x00..0x08) | 0x0B | 0x0C | (0x0E..0x1F));  
 	S             =    (0x20 | 0x9 | 0xD | 0xA)+;
@@ -68,7 +60,7 @@
 	VersionNum    =    ('1.' [0-9]+) $append %{token("document.version");};
 	VersionInfo   =    S 'version' Eq @{ m_token.clear();} ("'" VersionNum "'" | '"' VersionNum '"');
 	EncName       =    ([a-zA-Z] ([a-zA-Z0-9._] | '-')*) $append;
-	EncodingDecl  =    S 'encoding' Eq ('"' EncName '"' | "'" EncName "'" ) @{encoding(NULL); token("document.encoding");};
+	EncodingDecl  =    S 'encoding' Eq ('"' EncName '"' | "'" EncName "'" ) @{encoding(); token("document.encoding");};
 	SDDecl        =    S 'standalone' Eq (("'" ('yes' @{token("document.standalone");} | 'no') "'") | ('"' ('yes' @{token("document.standalone");} | 'no') '"'));
 		                   	
 	XMLDecl       =    XMLPart VersionInfo EncodingDecl? SDDecl? S? '?>';
@@ -138,9 +130,10 @@
 	EntityValue   =    '"' ([^%&"] $append | PEReference | Reference)* '"' |  "'" ([^%&'] $append | PEReference | Reference)* "'";
 	NDataDecl     =    S 'NDATA' S Name $entity;
 	EntityDef     =    EntityValue | (ExternalID NDataDecl?);
-	GEDecl        =    '<!ENTITY' S Name ${m_entity_name.push(m_char);} S EntityDef S? '>' @{general_entity();};
+	
+	GEDecl        =    '<!ENTITY' S Name $entity_name S EntityDef S? '>' @{general_entity();};
 	PEDef         =    EntityValue | ExternalID;
-	PEDecl        =    '<!ENTITY' S '%' S Name ${m_entity_name.push(m_char);} S PEDef S? '>' @{param_entity();};
+	PEDecl        =    '<!ENTITY' S '%' S Name $entity_name S PEDef S? '>' @{param_entity();};
 	EntityDecl    =    GEDecl | PEDecl;
 	PublicID      =    'PUBLIC' S PubidLiteral;
 	NotationDecl  =    '<!NOTATION' S Name S (ExternalID | PublicID) S? '>';
@@ -173,7 +166,7 @@
 	content_1    :=    CharData ((element | CDSect | PI | Comment) CharData)* ETag @return;
 	
 	doctypedecl   =    '<!DOCTYPE' S QName $append %{token("doctype.start");} (S ExternalID)? S? ('[' intSubset ']' S?)? '>' @{token("doctype.end");};
-	prolog        =    BOM? XMLDecl? Misc* (doctypedecl Misc*)?;
+	prolog        =    XMLDecl? Misc* (doctypedecl Misc*)?;
 	document      =    prolog element Misc*;	
  
 	main := document;

@@ -23,6 +23,7 @@
 #define TOKENIZER_H_INCLUDED_
 
 #include "Token.h"
+#include "Decoder.h"
 
 class Tokenizer
 {
@@ -48,6 +49,8 @@ private:
 	Token m_entity;
 	Token m_system;
 	Token m_public;
+
+	Decoder* m_decoder;
 		
 	// These are the private members used by Ragel
 	Tokenizer& operator ++ ()
@@ -71,8 +74,8 @@ private:
 		return m_char; 
 	}
 	
-	void encoding(const char*)
-	{}
+	void encoding();
+	void decoder(Decoder::eType type);
 
 	void pre_push();
 		

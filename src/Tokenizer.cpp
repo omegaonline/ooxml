@@ -26,13 +26,16 @@
 Tokenizer::Tokenizer() : 
 		m_stack(NULL), 
 		m_stacksize(0),
-		m_char('\0')
+		m_char('\0'),
+		m_decoder(NULL)
 {
 }
 
 Tokenizer::~Tokenizer()
 {
 	OOBase::HeapAllocator::free(m_stack);
+
+	delete m_decoder;
 }
 
 void Tokenizer::init()
@@ -62,7 +65,16 @@ unsigned char Tokenizer::next_char_i()
 	unsigned char c = '\0';
 	
 	if (m_input.empty())
+	{
 		c = get_char();
+
+		while (m_decoder)
+		{
+			c = m_decoder->next(c);
+			if (c != '\0')
+				break;
+		}
+	}
 	else
 		c = m_input.pop();
 		
@@ -82,6 +94,30 @@ void Tokenizer::next_char()
 	}
 	
 	m_char = c;
+}
+
+void Tokenizer::decoder(Decoder::eType type)
+{
+	// Apply a temporary decoder to the input stream, before reaching the real encoding value
+
+	free(m_decoder);
+	m_decoder = Decoder::create(type);
+}
+
+void Tokenizer::encoding()
+{
+	size_t len = 0;
+	unsigned char* val = m_token.copy(len);
+
+	if (len)
+	{
+		// Internal general entity
+		printf("Encoding: %.*s\n",(int)len,val);
+	}
+
+	// Drop any decoder and use the real decoder
+	delete m_decoder;
+	m_decoder = NULL;
 }
 
 void Tokenizer::general_entity()

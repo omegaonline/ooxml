@@ -60,7 +60,7 @@
 	VersionNum    =    ('1.' [0-9]+) $append %{token("document.version");};
 	VersionInfo   =    S 'version' Eq @{ m_token.clear();} ("'" VersionNum "'" | '"' VersionNum '"');
 	EncName       =    ([a-zA-Z] ([a-zA-Z0-9._] | '-')*) $append;
-	EncodingDecl  =    S 'encoding' Eq ('"' EncName '"' | "'" EncName "'" ) @{encoding(); token("document.encoding");};
+	EncodingDecl  =    S 'encoding' Eq ('"' EncName '"' | "'" EncName "'" ) @{encoding();};
 	SDDecl        =    S 'standalone' Eq (("'" ('yes' @{token("document.standalone");} | 'no') "'") | ('"' ('yes' @{token("document.standalone");} | 'no') '"'));
 		                   	
 	XMLDecl       =    XMLPart VersionInfo EncodingDecl? SDDecl? S? '?>';

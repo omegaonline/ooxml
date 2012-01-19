@@ -111,13 +111,12 @@ void Tokenizer::encoding()
 
 	if (len)
 	{
-		// Internal general entity
-		printf("Encoding: %.*s\n",(int)len,val);
-	}
+		// Drop any decoder and use the real decoder
+		delete m_decoder;
+		m_decoder = NULL;
 
-	// Drop any decoder and use the real decoder
-	delete m_decoder;
-	m_decoder = NULL;
+		printf("document.encoding: %.*s\n",(int)len,val);
+	}
 }
 
 void Tokenizer::general_entity()

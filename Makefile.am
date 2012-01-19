@@ -67,6 +67,8 @@ bin_PROGRAMS = ooxml
 ooxml_SOURCES = \
 	src/Decoder.h \
 	src/Decoder.cpp \
+	src/IO.h \
+	src/IO.cpp \
 	src/Tokenizer.h \
 	src/Tokenizer.cpp \
 	src/Token.h \

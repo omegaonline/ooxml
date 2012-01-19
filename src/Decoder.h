@@ -22,7 +22,7 @@ public:
 
 	static Decoder* create(eType type);
 
-	virtual unsigned char next(unsigned char c) = 0;
+	virtual unsigned char next(unsigned char c, bool& again) = 0;
 
 protected:
 	Decoder() {}

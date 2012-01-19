@@ -19,34 +19,15 @@
 //
 ///////////////////////////////////////////////////////////////////////////////////
 
-#include <stdlib.h>
-#include <stdio.h>
-#include <unistd.h>
-
 #include "Tokenizer.h"
-
-static FILE* f = NULL;
 
 int main( int argc, char* argv[] )
 {
-	f = fopen(argv[1],"rb");
-	if (f)
-	{
-		Tokenizer tok;
-		
-		tok.init();
-		
-		tok.next_token();
-			
-		fclose(f);
-	}
-	
-	return 0;
-}
+	Tokenizer tok;
 
-unsigned char Tokenizer::get_char()
-{
-	unsigned char c = '\0';
-	fread(&c,sizeof(c),1,f);
-	return c;
+	tok.load(argv[1]);
+		
+	tok.next_token();
+		
+	return 0;
 }

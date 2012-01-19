@@ -57,13 +57,13 @@
 	Char          =    utf8_char - ((0x00..0x08) | 0x0B | 0x0C | (0x0E..0x1F));  
 	S             =    (0x20 | 0x9 | 0xD | 0xA)+;
 	Eq            =    S? '=' S?;
-	VersionNum    =    ('1.' [0-9]+) $append %{token("document.version");};
-	VersionInfo   =    S 'version' Eq @{ m_token.clear();} ("'" VersionNum "'" | '"' VersionNum '"');
+	VersionNum    =    ('1.' [0-9]+) $append;
+	VersionInfo   =    S 'version' Eq @{m_token.clear();} ("'" VersionNum "'" | '"' VersionNum '"');
 	EncName       =    ([a-zA-Z] ([a-zA-Z0-9._] | '-')*) $append;
 	EncodingDecl  =    S 'encoding' Eq ('"' EncName '"' | "'" EncName "'" ) @{encoding();};
 	SDDecl        =    S 'standalone' Eq (("'" ('yes' @{token("document.standalone");} | 'no') "'") | ('"' ('yes' @{token("document.standalone");} | 'no') '"'));
 		                   	
-	XMLDecl       =    XMLPart VersionInfo EncodingDecl? SDDecl? S? '?>';
+	XMLDecl       =    XMLPart VersionInfo @{token("document.version");} EncodingDecl? SDDecl? S? '?>';
 	
 	Comment       =    '<!--' (Char* -- '--') $append '-->' @{token("comment.data",1);};
 	
@@ -109,7 +109,6 @@
 	PubidChar     =    0x20 | 0xD | 0xA | [a-zA-Z0-9] | '-' | ['()+,./:=?;!*#@$_%];
 	PubidLiteral  =    '"' PubidChar* ${m_public.push(m_char);} '"' | "'" (PubidChar - "'")* ${m_public.push(m_char);} "'";
 	ExternalID    =    'SYSTEM' S SystemLiteral | 'PUBLIC' S PubidLiteral S SystemLiteral;
-	Mixed         =    '(' S? '#PCDATA' (S? '|' S? QName)* S? ')*' | '(' S? '#PCDATA' S? ')';
 	StringType    =    'CDATA';
 	TokenizedType =    'ID' | 'IDREF' | 'IDREFS' | 'ENTITY' | 'ENTITIES' | 'NMTOKEN' | 'NMTOKENS';
 	NotationType  =    'NOTATION' S '(' S? Name (S? '|' S? Name)* S? ')';
@@ -146,10 +145,12 @@
 	CharData      =    (CharData_1? $append (Reference CharData_1? $append)*) %{token("text");};
 	
 	CDSect        =    '<![CDATA[' (Char* -- ']]>') ']]>';
-		 	
+
+	Mixed         =    '(' S? '#PCDATA' (S? '|' S? QName)* S? ')*' | '(' S? '#PCDATA' S? ')';
+	# There is a problem here with #PCDATA
 	action choice_point { fcall ch_or_seq1; }
 	ch_or_seq     =    '(' @choice_point;
-	cp            =    (QName | ch_or_seq) ('?' | '*' | '+')?;
+	cp            =    (QName | ch_or_seq | '#PCDATA') ('?' | '*' | '+')?;
 	choice        =    S? cp ( S? '|' S? cp )+ S?;
 	seq           =    S? cp ( S? ',' S? cp )* S?;	
 	ch_or_seq1   :=    (choice | seq) ')' @return;
@@ -165,7 +166,22 @@
 	element       =    EStart ('/>' @{token("element.end");} | '>' @{ fcall content_1; } );
 	content_1    :=    CharData ((element | CDSect | PI | Comment) CharData)* ETag @return;
 	
-	doctypedecl   =    '<!DOCTYPE' S QName $append %{token("doctype.start");} (S ExternalID)? S? ('[' intSubset ']' S?)? '>' @{token("doctype.end");};
+	Ignore        =    Char* -- ('<![' | ']]>');
+	
+	ignoreSectContents = Ignore ('<![' @{ fcall ignoreSectContents_1;} ']]>' Ignore)*;
+	ignoreSectContents_1 := ignoreSectContents @return;
+	
+	includeSect   =    '<![' S? 'INCLUDE' S? '[' @{ fcall extSubsetDecl_1;} ']]>';
+	ignoreSect    =    '<![' S? 'IGNORE' S? '[' ignoreSectContents ']]>';
+	
+	conditionalSect =  includeSect | ignoreSect;
+	extSubsetDecl =    (markupdecl | conditionalSect | DeclSep)*;
+	extSubsetDecl_1 := extSubsetDecl %return;
+			
+	TextDecl      =    '<?xml' VersionInfo? %{m_token.clear();} EncodingDecl S? '?>';
+	extSubset    :=    TextDecl? extSubsetDecl %{end_doctype(); fret;};
+	
+	doctypedecl   =    '<!DOCTYPE' S QName $append %{token("doctype.start");} (S ExternalID @{external_doctype();})? S? ('[' intSubset ']' S?)? '>' @{ if (do_doctype()) fcall extSubset;};
 	prolog        =    XMLDecl? Misc* (doctypedecl Misc*)?;
 	document      =    prolog element Misc*;	
  
@@ -183,7 +199,9 @@ void Tokenizer::do_init()
 
 bool Tokenizer::do_exec()
 {
-	static const unsigned char pe = '\0';
+	const unsigned char pe = '\0';
+	const unsigned char eof = '\0';
+		
 	Tokenizer& p = *this;
 	
 	%% write exec;

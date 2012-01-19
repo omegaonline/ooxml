@@ -19,7 +19,7 @@ namespace
 		UTF32LEDecoder() : m_count(0)
 		{}
 
-		unsigned char next(unsigned char c);
+		unsigned char next(unsigned char c, bool& again);
 
 	private:
 		unsigned int m_count;
@@ -31,7 +31,7 @@ namespace
 		UTF32BEDecoder() : m_count(0)
 		{}
 
-		unsigned char next(unsigned char c);
+		unsigned char next(unsigned char c, bool& again);
 
 	private:
 		unsigned int m_count;
@@ -43,7 +43,7 @@ namespace
 		UTF16LEDecoder() : m_cont(false)
 		{}
 
-		unsigned char next(unsigned char c);
+		unsigned char next(unsigned char c, bool& again);
 
 	private:
 		bool m_cont;
@@ -55,7 +55,7 @@ namespace
 		UTF16BEDecoder() : m_cont(true)
 		{}
 
-		unsigned char next(unsigned char c);
+		unsigned char next(unsigned char c, bool& again);
 
 	private:
 		bool m_cont;
@@ -64,57 +64,59 @@ namespace
 	class EBCDICDecoder : public Decoder
 	{
 	public:
-		unsigned char next(unsigned char c);
+		unsigned char next(unsigned char c, bool& again);
 	};
 }
 
-unsigned char UTF32LEDecoder::next(unsigned char c)
+unsigned char UTF32LEDecoder::next(unsigned char c, bool& again)
 {
-	if (m_count++ == 0)
-	{
-		if (c == 0)
-			c = 0xFF;
-	}
-	else if (m_count > 4)
+	again = (m_count++ != 0);
+
+	if (m_count >= 4)
 		m_count = 0;
 
+	if (again && c != '\0')
+		again = false;
+
 	return c;
 }
 
-unsigned char UTF32BEDecoder::next(unsigned char c)
+unsigned char UTF32BEDecoder::next(unsigned char c, bool& again)
 {
-	if (m_count++ == 3)
-	{
+	again = (m_count++ != 3);
+
+	if (m_count >= 4)
 		m_count = 0;
 
-		if (c == 0)
-			c = 0xFF;
-	}
+	if (again && c != '\0')
+		again = false;
 
 	return c;
 }
 
-unsigned char UTF16LEDecoder::next(unsigned char c)
+unsigned char UTF16LEDecoder::next(unsigned char c, bool& again)
 {
-	if (!m_cont && c == 0)
-		c = 0xFF;
+	again = m_cont;
+	m_cont = !again;
 
-	m_cont = !m_cont;
+	if (again && c != '\0')
+		again = false;
 
 	return c;
 }
 
-unsigned char UTF16BEDecoder::next(unsigned char c)
+unsigned char UTF16BEDecoder::next(unsigned char c, bool& again)
 {
-	if (!m_cont && c == 0)
-		c = 0xFF;
+	again = m_cont;
+	m_cont = !again;
 
-	m_cont = !m_cont;
+	if (again && c != '\0')
+		again = false;
 
 	return c;
 }
 
-unsigned char EBCDICDecoder::next(unsigned char c)
+unsigned char EBCDICDecoder::next(unsigned char c, bool& again)
 {
 	static const char table[256] =
 	{
@@ -136,6 +138,7 @@ unsigned char EBCDICDecoder::next(unsigned char c)
 		0x30,0x31,0x32,0x33,0x34,0x35,0x36,0x37,0x38,0x39,0xFF,0xFF,0xFF,0xFF,0xFF,0xFF
 	};
 
+	again = false;
 	return table[c];
 }
 

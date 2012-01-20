@@ -23,10 +23,38 @@
 #define TOKENIZER_H_INCLUDED_
 
 #include <OOBase/String.h>
+#include <OOBase/HashTable.h>
 
 #include "Token.h"
 #include "Decoder.h"
 #include "IO.h"
+
+class IOState
+{
+public:
+	IOState(const char* fname);
+	~IOState();
+
+	unsigned char get_char();
+
+	static void pop(IOState*& io);
+
+	OOBase::String m_fname;
+	size_t         m_col;
+	size_t         m_line;
+	Decoder*       m_decoder;
+	IOState*       m_next;
+
+private:
+	IOState(const IOState&);
+	IOState& operator = (const IOState&);
+
+	IO*            m_io;
+};
+
+// Callbacks
+
+OOBase::String resolve_url(const OOBase::String& strBase, const OOBase::String& strPublicId, const OOBase::String& strSystemId);
 
 class Tokenizer
 {
@@ -53,16 +81,19 @@ private:
 	Token m_system;
 	Token m_public;
 
-	struct IOInfo
+	IOState* m_io;
+
+	OOBase::HashTable<OOBase::String,OOBase::String> m_int_gen_entities;
+	OOBase::HashTable<OOBase::String,OOBase::String> m_int_param_entities;
+
+	struct External
 	{
-		OOBase::String m_fname;
-		size_t         m_col;
-		size_t         m_line;
-		IO*            m_io;
-		Decoder*       m_decoder;
-		IOInfo*        m_prev;
+		OOBase::String m_strPublicId;
+		OOBase::String m_strSystemId;
+		OOBase::String m_strNData;
 	};
-	IOInfo* m_io;
+	OOBase::HashTable<OOBase::String,External> m_ext_gen_entities;
+	OOBase::HashTable<OOBase::String,External> m_ext_param_entities;
 		
 	// These are the private members used by Ragel
 	Tokenizer& operator ++ ()
@@ -86,8 +117,6 @@ private:
 		return m_char; 
 	}
 	
-	struct IOInfo* new_io(const char* fname);
-
 	void encoding();
 	void decoder(Decoder::eType type);
 

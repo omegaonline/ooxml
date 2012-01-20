@@ -23,6 +23,54 @@
 
 #include <OOBase/Memory.h>
 
+IOState::IOState(const char* fname) :
+		m_col(0),
+		m_line(1),
+		m_decoder(NULL),
+		m_next(NULL),
+		m_io(new IO())
+{
+	int err = m_fname.assign(fname);
+	if (err != 0)
+		throw "Buggered";
+
+	m_io->open(fname);
+}
+
+IOState::~IOState()
+{
+	delete m_decoder;
+	delete m_io;
+	delete m_next;
+}
+
+unsigned char IOState::get_char()
+{
+	unsigned char c = '\0';
+	if (m_io)
+	{
+		bool again = false;
+		do
+		{
+			c = m_io->get_char();
+
+			if (m_decoder)
+				c = m_decoder->next(c,again);
+		}
+		while(again);
+	}
+
+	return c;
+}
+
+void IOState::pop(IOState*& io)
+{
+	IOState* n = io;
+	io = io->m_next;
+	n->m_next = NULL;
+	delete n;
+}
+
 Tokenizer::Tokenizer() : 
 		m_stack(NULL), 
 		m_stacksize(0),
@@ -34,27 +82,12 @@ Tokenizer::Tokenizer() :
 Tokenizer::~Tokenizer()
 {
 	OOBase::HeapAllocator::free(m_stack);
-
-	while (m_io != NULL)
-	{
-		struct IOInfo* n = m_io->m_prev;
-		delete m_io->m_decoder;
-		delete m_io->m_io;
-		delete m_io;
-		m_io = n;
-	}
 }
 
 void Tokenizer::load(const char* fname)
 {
-	while (m_io != NULL)
-	{
-		struct IOInfo* n = m_io->m_prev;
-		delete m_io->m_decoder;
-		delete m_io->m_io;
-		delete m_io;
-		m_io = n;
-	}
+	delete m_io;
+	m_io = NULL;
 
 	do_init();
 	
@@ -65,35 +98,9 @@ void Tokenizer::load(const char* fname)
 	m_system.clear();
 	m_public.clear();
 
-	m_io = new_io(fname);
+	m_io = new IOState(fname);
 
 	next_char();
-}
-
-Tokenizer::IOInfo* Tokenizer::new_io(const char* fname)
-{
-	IOInfo* io = new IOInfo;
-	int err = io->m_fname.assign(fname);
-	if (err != 0)
-	{
-		delete io;
-		throw "Failed to assign string";
-	}
-
-	io->m_col = 0;
-	io->m_line = 1;
-	io->m_io = new IO;
-	io->m_decoder = NULL;
-
-	err = io->m_io->open(fname);
-	if (err != 0)
-	{
-		delete io->m_io;
-		delete io;
-		throw "Failed to open file";
-	}
-
-	return io;
 }
 
 void Tokenizer::pre_push()
@@ -116,17 +123,7 @@ unsigned char Tokenizer::next_char_i()
 	unsigned char c = '\0';
 	
 	if (m_input.empty())
-	{
-		bool again = false;
-		do
-		{
-			c = m_io->m_io->get_char();
-
-			if (m_io->m_decoder)
-				c = m_io->m_decoder->next(c,again);
-		}
-		while(again);
-	}
+		c = m_io->get_char();
 	else
 		c = m_input.pop();
 		
@@ -158,7 +155,6 @@ void Tokenizer::next_char()
 void Tokenizer::decoder(Decoder::eType type)
 {
 	// Apply a temporary decoder to the input stream, before reaching the real encoding value
-
 	free(m_io->m_decoder);
 	m_io->m_decoder = Decoder::create(type);
 }
@@ -180,41 +176,56 @@ void Tokenizer::encoding()
 
 void Tokenizer::general_entity()
 {
+	OOBase::String strName;
+	m_entity_name.copy(strName);
+
 	size_t val_len = 0;
 	unsigned char* val = m_token.copy(val_len);
 
 	if (val_len)
 	{
 		// Internal general entity
+		OOBase::String strVal;
+		strVal.assign(reinterpret_cast<char*>(val),val_len);
+
+		m_int_gen_entities.insert(strName,strVal);
 	}
 	else
 	{
-		// External general entity
-		size_t ndata_len = 0;
-		unsigned char* ndata = m_entity.copy(ndata_len);
-		if (ndata_len)
-		{
-			// Unparsed entity
-		}
-		else
-		{
-			// External parsed entity
-		}
+		// Unparsed entity or external parsed entity
+		struct External ext;
+		m_entity.copy(ext.m_strNData);
+		m_system.copy(ext.m_strSystemId);
+		m_public.copy(ext.m_strPublicId);
+
+		m_ext_gen_entities.insert(strName,ext);
 	}
 }
 
 void Tokenizer::param_entity()
 {
+	OOBase::String strName;
+	m_entity_name.copy(strName);
+
 	size_t val_len = 0;
 	unsigned char* val = m_token.copy(val_len);
 
 	if (val_len)
 	{
 		// Internal parameter entity
+		OOBase::String strVal;
+		strVal.assign(reinterpret_cast<char*>(val),val_len);
+
+		m_int_param_entities.insert(strName,strVal);
 	}
 	else
 	{
 		// External parameter entity
+		struct External ext;
+		m_system.copy(ext.m_strSystemId);
+		m_public.copy(ext.m_strPublicId);
+
+		m_ext_param_entities.insert(strName,ext);
 	}
 }
 
@@ -264,40 +275,29 @@ void Tokenizer::token(const char* s, size_t offset)
 void Tokenizer::next_token()
 {
 	if (!do_exec())
-		printf("FAILED! %d\n",m_cs);
+		printf("Syntax error in %s, line %ld, column %ld.\n",m_io->m_fname.c_str(),m_io->m_line,m_io->m_col);
 }
 
 void Tokenizer::external_doctype()
 {
-	size_t sys_len = 0;
-	unsigned char* sys_val = m_system.copy(sys_len);
+	OOBase::String strSystemId;
+	m_system.copy(strSystemId);
 
-	size_t pub_len = 0;
-	unsigned char* pub_val = m_public.copy(pub_len);
+	OOBase::String strPublicId;
+	m_public.copy(strPublicId);
 
-	char szBuf[1024] = {0};
-	strcpy(szBuf,m_io->m_fname.c_str());
-	char* s = strrchr(szBuf,'/');
-	if (s)
-		*(s+1) = '\0';
-
-	size_t len = sizeof(szBuf) - strlen(szBuf);
-	memcpy(szBuf+strlen(szBuf),sys_val,sys_len >= len ? len-1 : sys_len);
-
-	IOInfo* n = new_io(szBuf);
-	int err = n->m_fname.assign(szBuf);
-
-	// We cheat and use m_prev here
-	m_io->m_prev = n;
+	// We cheat and use m_next here
+	m_io->m_next = new IOState(resolve_url(m_io->m_fname,strPublicId,strSystemId).c_str());
 }
 
 bool Tokenizer::do_doctype()
 {
-	if (m_io->m_prev)
+	// We cheat and use m_next here
+	if (m_io->m_next)
 	{
-		IOInfo* n = m_io->m_prev;
-		m_io->m_prev = NULL;
-		n->m_prev = m_io;
+		IOState* n = m_io->m_next;
+		m_io->m_next = NULL;
+		n->m_next = m_io;
 		m_io = n;
 
 		return true;
@@ -309,11 +309,7 @@ bool Tokenizer::do_doctype()
 
 void Tokenizer::end_doctype()
 {
-	IOInfo* n = m_io;
-	m_io = m_io->m_prev;
-	delete n->m_decoder;
-	delete n->m_io;
-	delete n;
+	IOState::pop(m_io);
 
 	printf("doctype.end\n");
 }

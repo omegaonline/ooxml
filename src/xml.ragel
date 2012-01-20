@@ -29,7 +29,7 @@
 	action return { fret; }
 	action append { m_token.push(m_char); }
 	action entity { m_entity.push(m_char); }
-	action entity_name { m_entity.push(m_char); }
+	action entity_name { m_entity_name.push(m_char); }
 	
 	# UTF-8 validation
 	utf8_cont = 0x80..0xBF;
@@ -146,15 +146,14 @@
 	
 	CDSect        =    '<![CDATA[' (Char* -- ']]>') ']]>';
 
-	Mixed         =    '(' S? '#PCDATA' (S? '|' S? QName)* S? ')*' | '(' S? '#PCDATA' S? ')';
-	# There is a problem here with #PCDATA
 	action choice_point { fcall ch_or_seq1; }
 	ch_or_seq     =    '(' @choice_point;
-	cp            =    (QName | ch_or_seq | '#PCDATA') ('?' | '*' | '+')?;
+	cp            =    (QName | ch_or_seq) ('?' | '*' | '+')?;
 	choice        =    S? cp ( S? '|' S? cp )+ S?;
 	seq           =    S? cp ( S? ',' S? cp )* S?;	
 	ch_or_seq1   :=    (choice | seq) ')' @return;
-	children      =    ch_or_seq ('?' | '*' | '+')?;
+	children      =    '(' S? (choice | seq) ')' ('?' | '*' | '+')?;
+	Mixed         =    '(' S? '#PCDATA' ((S? '|' S? QName)* S? ')*' | S? ')');
 		
 	contentspec   =    'EMPTY' | 'ANY' | Mixed | children;
 	elementdecl   =    '<!ELEMENT' S QName S contentspec S? '>';

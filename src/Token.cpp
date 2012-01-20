@@ -81,3 +81,10 @@ unsigned char* Token::copy(size_t& len)
 	m_len = 0;
 	return m_buffer;
 }
+
+int Token::copy(OOBase::String& str)
+{
+	size_t len = 0;
+	unsigned char* v = copy(len);
+	return str.assign(reinterpret_cast<char*>(v),len);
+}

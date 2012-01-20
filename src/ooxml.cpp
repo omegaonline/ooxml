@@ -31,3 +31,12 @@ int main( int argc, char* argv[] )
 		
 	return 0;
 }
+
+OOBase::String resolve_url(const OOBase::String& strBase, const OOBase::String& strPublicId, const OOBase::String& strSystemId)
+{
+	OOBase::String path,file;
+	OOBase::Paths::SplitDirAndFilename(strBase.c_str(),path,file);
+	OOBase::Paths::AppendDirSeparator(path);
+	path.append(strSystemId.c_str());
+	return path;
+}

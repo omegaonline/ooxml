@@ -22,7 +22,7 @@
 #ifndef TOKEN_H_INCLUDED_
 #define TOKEN_H_INCLUDED_
 
-#include <stddef.h>
+#include <OOBase/String.h>
 
 class Token
 {
@@ -35,6 +35,7 @@ public:
 	void push(unsigned char c);
 	void clear();
 	unsigned char* copy(size_t& len);
+	int copy(OOBase::String& str);
 
 private:
 	Token(const Token&);

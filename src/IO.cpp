@@ -27,6 +27,7 @@ int IO::open(const char* fname)
 unsigned char IO::get_char()
 {
 	unsigned char c = '\0';
-	fread(&c,sizeof(c),1,m_f);
+	if (m_f)
+		fread(&c,sizeof(c),1,m_f);
 	return c;
 }

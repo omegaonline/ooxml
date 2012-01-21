@@ -7,8 +7,6 @@
 
 #include "Decoder.h"
 
-#include <stddef.h>
-
 // These decoders only need to handle ASCII 0x01..0x7F
 
 namespace
@@ -144,25 +142,36 @@ unsigned char EBCDICDecoder::next(unsigned char c, bool& again)
 
 Decoder* Decoder::create(eType type)
 {
+	Decoder* ret = NULL;
 	switch (type)
 	{
 	case UTF32LE:
-		return new UTF32LEDecoder();
+		ret = new (std::nothrow) UTF32LEDecoder();
+		break;
 
 	case UTF32BE:
-		return new UTF32BEDecoder();
+		ret = new (std::nothrow) UTF32BEDecoder();
+		break;
 
 	case UTF16LE:
-		return new UTF16LEDecoder();
+		ret = new (std::nothrow) UTF16LEDecoder();
+		break;
 
 	case UTF16BE:
-		return new UTF16BEDecoder();
+		ret = new (std::nothrow) UTF16BEDecoder();
+		break;
 
 	case EBCDIC:
-		return new EBCDICDecoder();
+		ret = new (std::nothrow) EBCDICDecoder();
+		break;
 
 	default:
 		return NULL;
 	}
+
+	if (!ret)
+		throw "Out of memory";
+
+	return ret;
 }
 

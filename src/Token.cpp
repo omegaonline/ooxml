@@ -21,8 +21,6 @@
 
 #include "Token.h"
 
-#include <OOBase/Memory.h>
-
 Token::Token() :
 		m_buffer(NULL),
 		m_alloc(0),
@@ -33,7 +31,7 @@ Token::Token() :
 Token::~Token()
 {
 	OOBase::HeapAllocator::free(m_buffer);
-}void append(const OOBase::String& str);
+}
 
 bool Token::empty() const
 {
@@ -54,17 +52,19 @@ void Token::push(unsigned char c)
 	if (!m_buffer)
 	{
 		m_buffer = static_cast<unsigned char*>(OOBase::HeapAllocator::allocate(32));
-		if (m_buffer)
-			m_alloc = 32;
+		if (!m_buffer)
+			throw "Out of memory";
+
+		m_alloc = 32;
 	}
 	else if (m_len + 1 > m_alloc)
 	{
 		unsigned char* new_buffer = static_cast<unsigned char*>(OOBase::HeapAllocator::reallocate(m_buffer,m_alloc * 2));
-		if (new_buffer)
-		{
-			m_alloc *= 2;
-			m_buffer = new_buffer;
-		}
+		if (!new_buffer)
+			throw "Out of memory";
+
+		m_alloc *= 2;
+		m_buffer = new_buffer;
 	}
 
 	m_buffer[m_len++] = c;
@@ -75,18 +75,20 @@ void Token::clear()
 	m_len = 0;
 }
 
-unsigned char* Token::copy(size_t& len)
+const char* Token::pop(size_t& len)
 {
 	len = m_len;
 	m_len = 0;
-	return m_buffer;
+	return reinterpret_cast<char*>(m_buffer);
 }
 
-int Token::copy(OOBase::String& str)
+void Token::pop(OOBase::String& str)
 {
 	size_t len = 0;
-	unsigned char* v = copy(len);
-	return str.assign(reinterpret_cast<char*>(v),len);
+	const char* v = pop(len);
+	int err = str.assign(v,len);
+	if (err != 0)
+		throw "Out of memory";
 }
 
 void Token::rappend(const OOBase::String& str)

@@ -26,8 +26,17 @@ int main( int argc, char* argv[] )
 	Tokenizer tok;
 
 	tok.load(argv[1]);
+
+	Tokenizer::TokenType tok_type;
 		
-	tok.next_token();
+	do
+	{
+		OOBase::String strToken;
+		tok_type = tok.next_token(strToken);
+
+		printf("%d: %s\n",(int)tok_type,strToken.c_str());
+	}
+	while (tok_type != Tokenizer::End && tok_type != Tokenizer::Error);
 		
 	return 0;
 }

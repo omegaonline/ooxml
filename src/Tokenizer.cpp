@@ -21,18 +21,16 @@
 
 #include "Tokenizer.h"
 
-#include <OOBase/Memory.h>
-
 IOState::IOState(const char* fname) :
 		m_col(0),
 		m_line(1),
 		m_decoder(NULL),
 		m_next(NULL),
-		m_io(new IO())
+		m_io(new (std::nothrow) IO())
 {
 	int err = m_fname.assign(fname);
 	if (err != 0)
-		throw "Buggered";
+		throw "Out of memory";
 
 	m_io->open(fname);
 }
@@ -61,6 +59,11 @@ unsigned char IOState::get_char()
 	}
 
 	return c;
+}
+
+bool IOState::is_eof() const
+{
+	return (m_io == NULL || m_io->is_eof());
 }
 
 void IOState::pop(IOState*& io)
@@ -97,9 +100,15 @@ Tokenizer::Tokenizer() :
 	for (const struct predef* p = predefined;p->k != NULL;++p)
 	{
 		OOBase::String strK,strV;
-		strK.assign(p->k);
-		strV.assign(p->v);
-		m_int_gen_entities.insert(strK,strV);
+		int err = strK.assign(p->k);
+		if (err == 0)
+			err = strV.assign(p->v);
+
+		if (err == 0)
+			err = m_int_gen_entities.insert(strK,strV);
+
+		if (err != 0)
+			throw "Out of memory";
 	}
 }
 
@@ -122,7 +131,7 @@ void Tokenizer::load(const char* fname)
 	m_system.clear();
 	m_public.clear();
 
-	m_io = new IOState(fname);
+	m_io = new (std::nothrow) IOState(fname);
 
 	next_char();
 }
@@ -172,7 +181,9 @@ void Tokenizer::next_char()
 		m_io->m_col = 0;
 	}
 
-	++m_io->m_col;
+	if (c != 0)
+		++m_io->m_col;
+
 	m_char = c;
 }
 
@@ -183,10 +194,10 @@ void Tokenizer::decoder(Decoder::eType type)
 	m_io->m_decoder = Decoder::create(type);
 }
 
-bool Tokenizer::encoding()
+bool Tokenizer::encoding(OOBase::String& str)
 {
 	size_t len = 0;
-	unsigned char* val = m_token.copy(len);
+	const char* val = m_token.pop(len);
 
 	if (len)
 	{
@@ -196,7 +207,10 @@ bool Tokenizer::encoding()
 
 		if (!m_io->m_next)
 		{
-			printf("document.encoding: %.*s\n",(int)len,val);
+			int err = str.assign(val,len);
+			if (err != 0)
+				throw "Out of memory";
+
 			return true;
 		}
 	}
@@ -207,62 +221,72 @@ bool Tokenizer::encoding()
 void Tokenizer::general_entity()
 {
 	OOBase::String strName;
-	m_entity_name.copy(strName);
+	m_entity_name.pop(strName);
 
 	size_t val_len = 0;
-	unsigned char* val = m_token.copy(val_len);
+	const char* val = m_token.pop(val_len);
 
 	if (val_len)
 	{
 		// Internal general entity
 		OOBase::String strVal;
-		strVal.assign(reinterpret_cast<char*>(val),val_len);
+		int err = strVal.assign(val,val_len);
+		if (err == 0)
+			err = m_int_gen_entities.insert(strName,strVal);
 
-		m_int_gen_entities.insert(strName,strVal);
+		if (err != 0)
+			throw "Out of memory";
 	}
 	else
 	{
 		// Unparsed entity or external parsed entity
 		struct External ext;
-		m_entity.copy(ext.m_strNData);
-		m_system.copy(ext.m_strSystemId);
-		m_public.copy(ext.m_strPublicId);
+		m_entity.pop(ext.m_strNData);
+		m_system.pop(ext.m_strSystemId);
+		m_public.pop(ext.m_strPublicId);
 
-		m_ext_gen_entities.insert(strName,ext);
+		int err = m_ext_gen_entities.insert(strName,ext);
+		if (err != 0)
+			throw "Out of memory";
 	}
 }
 
 void Tokenizer::param_entity()
 {
 	OOBase::String strName;
-	m_entity_name.copy(strName);
+	m_entity_name.pop(strName);
 
 	size_t val_len = 0;
-	unsigned char* val = m_token.copy(val_len);
+	const char* val = m_token.pop(val_len);
 
 	if (val_len)
 	{
 		// Internal parameter entity
 		OOBase::String strVal;
-		strVal.assign(reinterpret_cast<char*>(val),val_len);
+		int err = strVal.assign(val,val_len);
+		if (err == 0)
+			err = m_int_param_entities.insert(strName,strVal);
 
-		m_int_param_entities.insert(strName,strVal);
+		if (err != 0)
+			throw "Out of memory";
 	}
 	else
 	{
 		// External parameter entity
 		struct External ext;
-		m_system.copy(ext.m_strSystemId);
-		m_public.copy(ext.m_strPublicId);
+		m_system.pop(ext.m_strSystemId);
+		m_public.pop(ext.m_strPublicId);
 
-		m_ext_param_entities.insert(strName,ext);
+		int err = m_ext_param_entities.insert(strName,ext);
+		if (err != 0)
+			throw "Out of memory";
 	}
 }
 
 bool Tokenizer::subst_entity()
 {
 	OOBase::String strEnt,strReplace;
-	m_entity.copy(strEnt);
+	m_entity.pop(strEnt);
 
 	OOBase::String* pInt = m_int_gen_entities.find(strEnt);
 	if (pInt)
@@ -280,7 +304,7 @@ bool Tokenizer::subst_entity()
 		else
 		{
 			// Start pulling from external source
-			IOState* n = new IOState(resolve_url(m_io->m_fname,pExt->m_strPublicId,pExt->m_strSystemId).c_str());
+			IOState* n = new (std::nothrow) IOState(resolve_url(m_io->m_fname,pExt->m_strPublicId,pExt->m_strSystemId).c_str());
 			n->m_next = m_io;
 			m_io = n;
 			return true;
@@ -294,9 +318,13 @@ bool Tokenizer::subst_entity()
 void Tokenizer::subst_char(int base)
 {
 	OOBase::String strEntity;
-	m_entity.copy(strEntity);
+	m_entity.pop(strEntity);
 
 	unsigned long v = strtoul(strEntity.c_str(),NULL,base);
+
+	// Check for Char (for xml 1.0)
+	if (v <= 0x1F && (v != 0x9 || v != 0xA || v != 0xD))
+		throw "Invalid Char";
 
 	// Now recode v as UTF-8...
 	if (v <= 0x7f)
@@ -327,33 +355,29 @@ void Tokenizer::subst_char(int base)
 	}
 }
 
-void Tokenizer::token(const char* s, size_t offset)
+void Tokenizer::set_token(OOBase::String& str, size_t offset)
 {
 	size_t len = 0;
-	unsigned char* tok = m_token.copy(len);
+	const char* tok = m_token.pop(len);
 
-	if (len > offset)
-		printf("%s: %.*s\n",s,(int)(len - offset),tok);
-	else
-		printf("%s\n",s);
-}
+	if (offset > len)
+		offset = len;
 
-void Tokenizer::next_token()
-{
-	if (!do_exec())
-		printf("Syntax error in %s, line %ld, column %ld.\n",m_io->m_fname.c_str(),m_io->m_line,m_io->m_col);
+	int err = str.assign(tok,len - offset);
+	if (err != 0)
+		throw "Out of memory";
 }
 
 void Tokenizer::external_doctype()
 {
 	OOBase::String strSystemId;
-	m_system.copy(strSystemId);
+	m_system.pop(strSystemId);
 
 	OOBase::String strPublicId;
-	m_public.copy(strPublicId);
+	m_public.pop(strPublicId);
 
 	// We cheat and use m_next here
-	m_io->m_next = new IOState(resolve_url(m_io->m_fname,strPublicId,strSystemId).c_str());
+	m_io->m_next = new (std::nothrow) IOState(resolve_url(m_io->m_fname,strPublicId,strSystemId).c_str());
 }
 
 bool Tokenizer::do_doctype()

@@ -22,6 +22,7 @@
 #ifndef TOKEN_H_INCLUDED_
 #define TOKEN_H_INCLUDED_
 
+#include <OOBase/GlobalNew.h>
 #include <OOBase/String.h>
 
 class Token
@@ -31,11 +32,15 @@ public:
 	~Token();
 
 	bool empty() const;
-	unsigned char pop();
+
 	void push(unsigned char c);
+
+	unsigned char pop();
+	const char* pop(size_t& len);
+	void pop(OOBase::String& str);
+
 	void clear();
-	unsigned char* copy(size_t& len);
-	int copy(OOBase::String& str);
+
 	void rappend(const OOBase::String& str);
 
 private:

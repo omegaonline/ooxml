@@ -8,6 +8,8 @@
 #ifndef DECODER_H_INCLUDED_
 #define DECODER_H_INCLUDED_
 
+#include <OOBase/GlobalNew.h>
+
 class Decoder
 {
 public:

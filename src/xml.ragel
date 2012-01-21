@@ -19,6 +19,9 @@
 //
 ///////////////////////////////////////////////////////////////////////////////////
 
+#define TOKEN(n) token_type=Tokenizer::n;set_token(strToken);pe=true;
+#define TOKEN2(n,m) token_type=Tokenizer::n;set_token(strToken,m);pe=true;
+
 %%{
 	machine xml;
 	access this->m_;
@@ -60,12 +63,12 @@
 	VersionNum    =    ('1.' [0-9]+) $append;
 	VersionInfo   =    S 'version' Eq @{m_token.clear();} ("'" VersionNum "'" | '"' VersionNum '"');
 	EncName       =    ([a-zA-Z] ([a-zA-Z0-9._] | '-')*) $append;
-	EncodingDecl  =    S 'encoding' Eq ('"' EncName '"' | "'" EncName "'" ) @{encoding();};
-	SDDecl        =    S 'standalone' Eq (("'" ('yes' @{token("document.standalone");} | 'no') "'") | ('"' ('yes' @{token("document.standalone");} | 'no') '"'));
+	EncodingDecl  =    S 'encoding' Eq ('"' EncName '"' | "'" EncName "'" ) @{if (encoding(strToken)) {token_type=Tokenizer::DocumentEncoding;pe=true;}};
+	SDDecl        =    S 'standalone' Eq (("'" ('yes' @{TOKEN(DocumentStandalone)} | 'no') "'") | ('"' ('yes' @{TOKEN(DocumentStandalone)} | 'no') '"'));
 		                   	
-	XMLDecl       =    XMLPart VersionInfo @{token("document.version");} EncodingDecl? SDDecl? S? '?>';
+	XMLDecl       =    XMLPart VersionInfo @{TOKEN(DocumentVersion)} EncodingDecl? SDDecl? S? '?>';
 	
-	Comment       =    '<!--' (Char* -- '--') $append '-->' @{token("comment.data",1);};
+	Comment       =    '<!--' (Char* -- '--') $append '-->' @{TOKEN2(Comment,1)};
 	
 	NameStartChar =    [a-zA-Z:_]
 	                   | 0xC3 (utf8_cont - (0x97 | 0xB7))                          # [#xC0-#xD6] | [#xD8-#xF6] | [#xF8-#xFF]
@@ -101,7 +104,7 @@
 	NSAttName     =    PrefixedAttName | DefaultAttName;
 	
 	PITarget      =    Name - (('X' | 'x') ('M' | 'm') ('L' | 'l'));
-	PI            =    '<?' PITarget $append %{token("pi.target");} (S (Char* -- '?>') $append %{token("pi.data",1);} )? '?>';
+	PI            =    '<?' PITarget $append %{TOKEN(PiTarget)} (S (Char* -- '?>') $append %{TOKEN2(PiData,1)} )? '?>';
 	
 	Misc          =    Comment | PI | S;
 	
@@ -138,12 +141,12 @@
 	NotationDecl  =    '<!NOTATION' S Name S (ExternalID | PublicID) S? '>';
 	DeclSep       =    PEReference | S;   
 	
-	AttValue      =    ('"' ([^<&"] $append | Reference)*  '"' | "'" ([^<&'] $append | Reference)* "'") @{token("attribute.value");};
-	Attribute     =    (NSAttName | QName) $append Eq @{token("attribute.name");} AttValue;
+	AttValue      =    ('"' ([^<&"] $append | Reference)*  '"' | "'" ([^<&'] $append | Reference)* "'") @{TOKEN(AttributeValue)};
+	Attribute     =    (NSAttName | QName) $append Eq @{TOKEN(AttributeName)} AttValue;
 	
 	CharData      =    ([^<&]* -- ']]>') $append;
 	
-	CDSect        =    '<![CDATA[' (Char* -- ']]>') $append ']]>' @{token("cdsect.data",2);};
+	CDSect        =    '<![CDATA[' (Char* -- ']]>') $append ']]>' @{TOKEN2(CData,2)};
 
 	action choice_point { fcall ch_or_seq1; }
 	ch_or_seq     =    '(' @choice_point;
@@ -159,11 +162,11 @@
 	markupdecl    =    elementdecl | AttlistDecl | EntityDecl | NotationDecl | PI | Comment ;
 	intSubset     =    (markupdecl | DeclSep)*;
 	
-	ETag          =    '</' QName $append %{token("element.end");} S? '>';
-	EStart        =    '<' QName $append %{token("element.start");} (S Attribute)* S?;
-	element       =    EStart ('/>' @{token("element.end");} | '>' @{ fcall content_1; } );
-	content       =    CharData? (((element | CDSect | PI | Comment) >{token("text");} | Reference) CharData?)*;
-	content_1    :=    content ETag @return;
+	ETag          =    '</' QName $append %{TOKEN(ElementEnd)} S?;
+	EStart        =    '<' QName $append %{TOKEN(ElementStart)} (S Attribute)* S?;
+	element       =    EStart ('/>' @{ TOKEN(ElementEnd)} | '>' @{fcall content_1;} );
+	content       =    CharData? (((element | CDSect | PI | Comment) >{TOKEN(Text)} | Reference) CharData?)*;
+	content_1    :=    content ETag '>' @return;
 	
 	Ignore        =    Char* -- ('<![' | ']]>');
 	
@@ -180,12 +183,12 @@
 	TextDecl      =    XMLPart VersionInfo? %{m_token.clear();} EncodingDecl S? '?>';
 	
 	action ext_return { IOState::pop(m_io); fret;}
-	extSubset    :=    TextDecl? extSubsetDecl %{token("doctype.end");} %ext_return;
+	extSubset    :=    TextDecl? extSubsetDecl %{TOKEN(DocTypeEnd)} %ext_return;
 	extParsedEnt :=    TextDecl? content %ext_return;
 	
-	doctypedecl   =    '<!DOCTYPE' S QName $append %{token("doctype.start");} (S ExternalID @{external_doctype();})? S? ('[' intSubset ']' S?)? '>' @{ if (do_doctype()) fcall extSubset; else token("doctype.end");};
+	doctypedecl   =    '<!DOCTYPE' S QName $append %{TOKEN(DocTypeStart)} (S ExternalID @{external_doctype();})? S? ('[' intSubset ']' S?)? '>' @{ if (do_doctype()) fcall extSubset; else {TOKEN(DocTypeEnd)}};
 	prolog        =    XMLDecl? Misc* (doctypedecl Misc*)?;
-	document      =    prolog element Misc*;	
+	document      =    prolog element Misc* %{TOKEN(End);};	
  
 	main := document;
 }%%
@@ -199,14 +202,22 @@ void Tokenizer::do_init()
 	%% write init;
 }
 
-bool Tokenizer::do_exec()
+Tokenizer::TokenType Tokenizer::next_token(OOBase::String& strToken)
 {
-	const unsigned char pe = '\0';
-	const unsigned char eof = '\0';
-		
+	const EndOfFile eof = EndOfFile();
+			
+	TokenType token_type = Tokenizer::End;
 	Tokenizer& p = *this;
+	
+	bool pe = false;
 	
 	%% write exec;
 		
-	return (m_cs != %%{ write error; }%%);
+	if (m_cs == %%{ write error; }%%)
+	{
+		printf("Syntax error in %s, line %ld, column %ld.\n",m_io->m_fname.c_str(),m_io->m_line,m_io->m_col);
+		token_type = Tokenizer::Error;
+	}
+	
+	return token_type;
 }

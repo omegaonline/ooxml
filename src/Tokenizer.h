@@ -22,6 +22,7 @@
 #ifndef TOKENIZER_H_INCLUDED_
 #define TOKENIZER_H_INCLUDED_
 
+#include <OOBase/GlobalNew.h>
 #include <OOBase/String.h>
 #include <OOBase/HashTable.h>
 
@@ -36,7 +37,7 @@ public:
 	~IOState();
 
 	unsigned char get_char();
-
+	bool is_eof() const;
 	static void pop(IOState*& io);
 
 	OOBase::String m_fname;
@@ -63,7 +64,28 @@ public:
 	~Tokenizer();
 	
 	void load(const char* fname);
-	void next_token();
+
+	enum TokenType
+	{
+		Error = 0,
+		End = 1,
+		DocumentStandalone,
+		DocumentVersion,
+		DocumentEncoding,
+		DocTypeStart,
+		DocTypeEnd,
+		ElementStart,
+		ElementEnd,
+		AttributeName,
+		AttributeValue,
+		Text,
+		PiTarget,
+		PiData,
+		Comment,
+		CData,
+	};
+
+	TokenType next_token(OOBase::String& strToken);
 
 private:
 	// Ragel members
@@ -101,15 +123,20 @@ private:
 		next_char();
 		return *this;
 	}
-		
-	bool operator == (unsigned char c) const 
+
+	struct EndOfFile
+	{
+		int unused;
+	};
+
+	bool operator == (const EndOfFile&) const
 	{ 
-		return (m_char == c); 
+		return (m_io == NULL || m_io->is_eof());
 	}
-		
-	bool operator != (unsigned char c) const 
-	{ 
-		return (m_char != c); 
+
+	bool operator == (bool pe) const
+	{
+		return (pe || m_io == NULL || m_io->is_eof());
 	}
 		
 	unsigned char operator * () const
@@ -117,7 +144,7 @@ private:
 		return m_char; 
 	}
 	
-	bool encoding();
+	bool encoding(OOBase::String& str);
 	void decoder(Decoder::eType type);
 
 	void pre_push();
@@ -126,11 +153,10 @@ private:
 	bool do_doctype();
 
 	void do_init();
-	bool do_exec();
-	
+
 	unsigned char next_char_i();
 	void next_char();
-	void token(const char* s, size_t offset = 0);
+	void set_token(OOBase::String& str, size_t offset = 0);
 	
 	void general_entity();
 	void param_entity();

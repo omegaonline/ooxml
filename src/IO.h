@@ -20,12 +20,14 @@ public:
 
 	int open(const char* fname);
 	unsigned char get_char();
+	bool is_eof() const;
 
 private:
 	IO(const IO&);
 	IO& operator = (const IO&);
 
 	FILE* m_f;
+	bool m_eof;
 };
 
 #endif /* IO_H_ */

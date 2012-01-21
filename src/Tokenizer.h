@@ -117,15 +117,14 @@ private:
 		return m_char; 
 	}
 	
-	void encoding();
+	bool encoding();
 	void decoder(Decoder::eType type);
 
 	void pre_push();
 
 	void external_doctype();
 	bool do_doctype();
-	void end_doctype();
-		
+
 	void do_init();
 	bool do_exec();
 	
@@ -135,9 +134,8 @@ private:
 	
 	void general_entity();
 	void param_entity();
-	void subst_entity();
-	void subst_char();
-	void subst_hex();
+	bool subst_entity();
+	void subst_char(int base);
 };
 
 #endif // TOKENIZER_H_INCLUDED_

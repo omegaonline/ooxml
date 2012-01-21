@@ -36,6 +36,7 @@ public:
 	void clear();
 	unsigned char* copy(size_t& len);
 	int copy(OOBase::String& str);
+	void rappend(const OOBase::String& str);
 
 private:
 	Token(const Token&);

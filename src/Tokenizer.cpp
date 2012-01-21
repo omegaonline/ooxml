@@ -77,6 +77,30 @@ Tokenizer::Tokenizer() :
 		m_char('\0'),
 		m_io(NULL)
 {
+	// Preload the predefined internal entities
+	struct predef
+	{
+		const char* k;
+		const char* v;
+	};
+
+	static const predef predefined[] =
+	{
+		{"lt", "&#38;#60;"},
+		{"gt", "&#62;"},
+		{"amp", "&#38;#38;"},
+		{"apos", "&#39;"},
+		{"quot", "&#34;"},
+		{NULL,NULL}
+	};
+
+	for (const struct predef* p = predefined;p->k != NULL;++p)
+	{
+		OOBase::String strK,strV;
+		strK.assign(p->k);
+		strV.assign(p->v);
+		m_int_gen_entities.insert(strK,strV);
+	}
 }
 
 Tokenizer::~Tokenizer()
@@ -159,7 +183,7 @@ void Tokenizer::decoder(Decoder::eType type)
 	m_io->m_decoder = Decoder::create(type);
 }
 
-void Tokenizer::encoding()
+bool Tokenizer::encoding()
 {
 	size_t len = 0;
 	unsigned char* val = m_token.copy(len);
@@ -170,8 +194,14 @@ void Tokenizer::encoding()
 		delete m_io->m_decoder;
 		m_io->m_decoder = NULL;
 
-		printf("document.encoding: %.*s\n",(int)len,val);
+		if (!m_io->m_next)
+		{
+			printf("document.encoding: %.*s\n",(int)len,val);
+			return true;
+		}
 	}
+
+	return false;
 }
 
 void Tokenizer::general_entity()
@@ -229,36 +259,72 @@ void Tokenizer::param_entity()
 	}
 }
 
-void Tokenizer::subst_entity()
+bool Tokenizer::subst_entity()
 {
-	size_t len = 0;
-	unsigned char* val = m_entity.copy(len);
+	OOBase::String strEnt,strReplace;
+	m_entity.copy(strEnt);
 
-	char szBuf[128] = {0};
-	sprintf(szBuf,"&%.*s;",(int)len,val);
+	OOBase::String* pInt = m_int_gen_entities.find(strEnt);
+	if (pInt)
+		strReplace = *pInt;
+	else
+	{
+		External* pExt = m_ext_gen_entities.find(strEnt);
+		if (!pExt)
+			throw "Unrecognized entity";
+		else if (!pExt->m_strNData.empty())
+		{
+			void* TODO; // Unparsed entity handling
+			strReplace = strEnt;
+		}
+		else
+		{
+			// Start pulling from external source
+			IOState* n = new IOState(resolve_url(m_io->m_fname,pExt->m_strPublicId,pExt->m_strSystemId).c_str());
+			n->m_next = m_io;
+			m_io = n;
+			return true;
+		}
+	}
 
-	for (size_t i=0;szBuf[i] != '\0';++i)
-		m_token.push(szBuf[i]);
+	m_input.rappend(strReplace);
+	return false;
 }
 
-void Tokenizer::subst_char()
+void Tokenizer::subst_char(int base)
 {
-	//printf("CHARREF: '");
-	//m_entity.dump();
-	//printf("'\n");
-	
-	size_t len = 0;
-	unsigned char* val = m_entity.copy(len);
+	OOBase::String strEntity;
+	m_entity.copy(strEntity);
 
-	m_token.push('1');
-}
+	unsigned long v = strtoul(strEntity.c_str(),NULL,base);
 
-void Tokenizer::subst_hex()
-{
-	size_t len = 0;
-	unsigned char* val = m_entity.copy(len);
-
-	printf("CHARREF: '0x%.*s'\n",(int)len,val);
+	// Now recode v as UTF-8...
+	if (v <= 0x7f)
+		m_token.push(static_cast<unsigned char>(v));
+	else if (v <= 0x7FF)
+	{
+		m_token.push(static_cast<unsigned char>(v >> 6) | 0xc0);
+		m_token.push(static_cast<unsigned char>(v & 0x3f) | 0x80);
+	}
+	else if (v <= 0xFFFF)
+	{
+		m_token.push(static_cast<unsigned char>(v >> 12) | 0xe0);
+		m_token.push(static_cast<unsigned char>((v & 0xfc0) >> 6) | 0x80);
+		m_token.push(static_cast<unsigned char>(v & 0x3f) | 0x80);
+	}
+	else if (v <= 0x10FFFF)
+	{
+		m_token.push(static_cast<unsigned char>(v >> 18) | 0xf0);
+		m_token.push(static_cast<unsigned char>((v & 0x3f000) >> 12) | 0x80);
+		m_token.push(static_cast<unsigned char>((v & 0xfc0) >> 6) | 0x80);
+		m_token.push(static_cast<unsigned char>(v & 0x3f) | 0x80);
+	}
+	else
+	{
+		m_token.push('\xEF');
+		m_token.push('\xBF');
+		m_token.push('\xBD');
+	}
 }
 
 void Tokenizer::token(const char* s, size_t offset)
@@ -303,13 +369,5 @@ bool Tokenizer::do_doctype()
 		return true;
 	}
 
-	printf("doctype.end\n");
 	return false;
-}
-
-void Tokenizer::end_doctype()
-{
-	IOState::pop(m_io);
-
-	printf("doctype.end\n");
 }

@@ -117,8 +117,8 @@
 	EnumeratedType =   NotationType | Enumeration;
 	AttType       =    StringType | TokenizedType | EnumeratedType;
 	
-	EntityRef     =    '&' (NameStartChar (NameChar)*) $entity ';' @{subst_entity();};
-	CharRef       =    '&#' [0-9]+ $entity ';' @{subst_char();} | '&#x' [0-9a-fA-F]+ $entity ';' @{subst_hex();};
+	EntityRef     =    '&' (NameStartChar (NameChar)*) $entity ';' @{ if (subst_entity()) fcall extParsedEnt; };
+	CharRef       =    '&#' [0-9]+ $entity ';' @{subst_char(10);} | '&#x' [0-9a-fA-F]+ $entity ';' @{subst_char(16);};
 	Reference     =    EntityRef | CharRef;
 	
 	DeclAttValue  =    '"' ([^<&"] | Reference)*  '"' | "'" ([^<&'] | Reference)* "'";
@@ -141,10 +141,9 @@
 	AttValue      =    ('"' ([^<&"] $append | Reference)*  '"' | "'" ([^<&'] $append | Reference)* "'") @{token("attribute.value");};
 	Attribute     =    (NSAttName | QName) $append Eq @{token("attribute.name");} AttValue;
 	
-	CharData_1    =    ([^<&]* -- ']]>');
-	CharData      =    (CharData_1? $append (Reference CharData_1? $append)*) %{token("text");};
+	CharData      =    ([^<&]* -- ']]>') $append;
 	
-	CDSect        =    '<![CDATA[' (Char* -- ']]>') ']]>';
+	CDSect        =    '<![CDATA[' (Char* -- ']]>') $append ']]>' @{token("cdsect.data",2);};
 
 	action choice_point { fcall ch_or_seq1; }
 	ch_or_seq     =    '(' @choice_point;
@@ -163,7 +162,8 @@
 	ETag          =    '</' QName $append %{token("element.end");} S? '>';
 	EStart        =    '<' QName $append %{token("element.start");} (S Attribute)* S?;
 	element       =    EStart ('/>' @{token("element.end");} | '>' @{ fcall content_1; } );
-	content_1    :=    CharData ((element | CDSect | PI | Comment) CharData)* ETag @return;
+	content       =    CharData? (((element | CDSect | PI | Comment) >{token("text");} | Reference) CharData?)*;
+	content_1    :=    content ETag @return;
 	
 	Ignore        =    Char* -- ('<![' | ']]>');
 	
@@ -177,10 +177,13 @@
 	extSubsetDecl =    (markupdecl | conditionalSect | DeclSep)*;
 	extSubsetDecl_1 := extSubsetDecl %return;
 			
-	TextDecl      =    '<?xml' VersionInfo? %{m_token.clear();} EncodingDecl S? '?>';
-	extSubset    :=    TextDecl? extSubsetDecl %{end_doctype(); fret;};
+	TextDecl      =    XMLPart VersionInfo? %{m_token.clear();} EncodingDecl S? '?>';
 	
-	doctypedecl   =    '<!DOCTYPE' S QName $append %{token("doctype.start");} (S ExternalID @{external_doctype();})? S? ('[' intSubset ']' S?)? '>' @{ if (do_doctype()) fcall extSubset;};
+	action ext_return { IOState::pop(m_io); fret;}
+	extSubset    :=    TextDecl? extSubsetDecl %{token("doctype.end");} %ext_return;
+	extParsedEnt :=    TextDecl? content %ext_return;
+	
+	doctypedecl   =    '<!DOCTYPE' S QName $append %{token("doctype.start");} (S ExternalID @{external_doctype();})? S? ('[' intSubset ']' S?)? '>' @{ if (do_doctype()) fcall extSubset; else token("doctype.end");};
 	prolog        =    XMLDecl? Misc* (doctypedecl Misc*)?;
 	document      =    prolog element Misc*;	
  

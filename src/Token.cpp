@@ -33,7 +33,7 @@ Token::Token() :
 Token::~Token()
 {
 	OOBase::HeapAllocator::free(m_buffer);
-}
+}void append(const OOBase::String& str);
 
 bool Token::empty() const
 {
@@ -87,4 +87,13 @@ int Token::copy(OOBase::String& str)
 	size_t len = 0;
 	unsigned char* v = copy(len);
 	return str.assign(reinterpret_cast<char*>(v),len);
+}
+
+void Token::rappend(const OOBase::String& str)
+{
+	const char* start = str.c_str();
+	const char* end = start + str.length();
+
+	while (end != start)
+		push(*(--end));
 }

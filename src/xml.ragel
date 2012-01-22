@@ -144,7 +144,8 @@
 	AttValue      =    ('"' ([^<&"] $append | Reference)*  '"' | "'" ([^<&'] $append | Reference)* "'") @{TOKEN(AttributeValue)};
 	Attribute     =    (NSAttName | QName) $append Eq @{TOKEN(AttributeName)} AttValue;
 	
-	CharData      =    ([^<&]* -- ']]>') $append;
+	CharData_1    =    ([^<&]* -- ']]>') $append;
+	CharData      =    CharData_1 (Reference CharData_1?)* %{TOKEN(Text)};
 	
 	CDSect        =    '<![CDATA[' (Char* -- ']]>') $append ']]>' @{TOKEN2(CData,2)};
 
@@ -164,8 +165,8 @@
 	
 	ETag          =    '</' QName $append %{TOKEN(ElementEnd)} S?;
 	EStart        =    '<' QName $append %{TOKEN(ElementStart)} (S Attribute)* S?;
-	element       =    EStart ('/>' @{ TOKEN(ElementEnd)} | '>' @{fcall content_1;} );
-	content       =    CharData? (((element | CDSect | PI | Comment) >{TOKEN(Text)} | Reference) CharData?)*;
+	element       =    EStart ('/>' @{TOKEN(ElementEnd)} | '>' @{fcall content_1;} );
+	content       =    CharData? ((element | CDSect | PI | Comment) CharData?)*;
 	content_1    :=    content ETag '>' @return;
 	
 	Ignore        =    Char* -- ('<![' | ']]>');
@@ -188,9 +189,9 @@
 	
 	doctypedecl   =    '<!DOCTYPE' S QName $append %{TOKEN(DocTypeStart)} (S ExternalID @{external_doctype();})? S? ('[' intSubset ']' S?)? '>' @{ if (do_doctype()) fcall extSubset; else {TOKEN(DocTypeEnd)}};
 	prolog        =    XMLDecl? Misc* (doctypedecl Misc*)?;
-	document      =    prolog element Misc* %{TOKEN(End);};	
+	document      =    prolog element Misc*;
  
-	main := document;
+	main := document @{TOKEN(End)};
 }%%
 
 #include "../src/Tokenizer.h"
@@ -204,20 +205,23 @@ void Tokenizer::do_init()
 
 Tokenizer::TokenType Tokenizer::next_token(OOBase::String& strToken)
 {
+	// Ragel variables
+	Tokenizer&      p   = *this;
+	bool            pe  = false;
 	const EndOfFile eof = EndOfFile();
 			
-	TokenType token_type = Tokenizer::End;
-	Tokenizer& p = *this;
-	
-	bool pe = false;
-	
-	%% write exec;
-		
-	if (m_cs == %%{ write error; }%%)
+	TokenType token_type = Tokenizer::Error;
+	try
 	{
-		printf("Syntax error in %s, line %ld, column %ld.\n",m_io->m_fname.c_str(),m_io->m_line,m_io->m_col);
+		%% write exec;
+		
+		//if (m_cs == %%{ write error; }%% || (!pe && m_cs < %%{ write first_final; }%%))
+		//	token_type = Tokenizer::Error;
+	}
+	catch (...)
+	{
 		token_type = Tokenizer::Error;
 	}
-	
+		
 	return token_type;
 }

@@ -52,7 +52,10 @@ unsigned char IO::get_char()
 	if (m_f)
 	{
 		if (fread(&c,sizeof(c),1,m_f) != 1)
-			m_eof = (feof(m_f) != 0);
+		{
+			//if (feof(m_f))
+				m_eof = true;
+		}
 	}
 	return c;
 }

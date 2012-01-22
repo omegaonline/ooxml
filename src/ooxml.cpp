@@ -21,22 +21,193 @@
 
 #include "Tokenizer.h"
 
-int main( int argc, char* argv[] )
+static size_t passed = 0;
+static size_t failed = 0;
+
+static bool do_test(const OOBase::String& strURI)
 {
 	Tokenizer tok;
 
-	tok.load(argv[1]);
+	tok.load(strURI.c_str());
 
 	Tokenizer::TokenType tok_type;
-		
+	do
+	{
+		OOBase::String strToken;
+		tok_type = tok.next_token(strToken);
+	}
+	while (tok_type != Tokenizer::End && tok_type != Tokenizer::Error);
+
+	return (tok_type == Tokenizer::End);
+}
+
+static void pass()
+{
+	printf("[OK]\n");
+	++passed;
+}
+
+static void fail()
+{
+	printf("[Fail]\n");
+	++failed;
+}
+
+static void do_valid_test(const OOBase::String& strURI)
+{
+	if (!do_test(strURI))
+		fail();
+	else
+		pass();
+}
+
+static void do_invalid_test(const OOBase::String& strURI)
+{
+	if (do_test(strURI))
+		fail();
+	else
+		pass();
+}
+
+static void do_not_wf_test(const OOBase::String& strURI)
+{
+	if (do_test(strURI))
+		fail();
+	else
+		pass();
+}
+
+static void do_error_test(const OOBase::String& strURI)
+{
+	if (do_test(strURI))
+		fail();
+	else
+		pass();
+}
+
+static void do_test(Tokenizer& tok, const OOBase::String& strBase)
+{
+	OOBase::String strType;
+	OOBase::String strURI = strBase;
+	Tokenizer::TokenType tok_type;
 	do
 	{
 		OOBase::String strToken;
 		tok_type = tok.next_token(strToken);
 
-		printf("%d: %s\n",(int)tok_type,strToken.c_str());
+		if (tok_type == Tokenizer::AttributeName)
+		{
+			if (strToken == "ID")
+			{
+				if (tok.next_token(strToken) == Tokenizer::AttributeValue)
+					printf("Test: %s...",strToken.c_str());
+			}
+			else if (strToken == "TYPE")
+			{
+				if (tok.next_token(strToken) == Tokenizer::AttributeValue)
+					strType = strToken;
+			}
+			else if (strToken == "URI")
+			{
+				if (tok.next_token(strToken) == Tokenizer::AttributeValue)
+					strURI.append(strToken.c_str());
+			}
+		}
+		else if (tok_type == Tokenizer::ElementEnd && strToken == "TEST")
+		{
+			if (strType == "valid")
+				return do_valid_test(strURI);
+			else if (strType == "invalid")
+				return do_invalid_test(strURI);
+			else if (strType == "not-wf")
+				return do_not_wf_test(strURI);
+			else if (strType == "error")
+				return do_error_test(strURI);
+			else
+				return;
+		}
 	}
 	while (tok_type != Tokenizer::End && tok_type != Tokenizer::Error);
+}
+
+static void do_test_cases(Tokenizer& tok, const OOBase::String& strParent)
+{
+	OOBase::String strBase = strParent;
+	Tokenizer::TokenType tok_type;
+	do
+	{
+		OOBase::String strToken;
+		tok_type = tok.next_token(strToken);
+
+		if (tok_type == Tokenizer::AttributeName)
+		{
+			if (strToken == "xml:base")
+			{
+				if (tok.next_token(strToken) == Tokenizer::AttributeValue)
+					strBase.append(strToken.c_str());
+			}
+			else if (strToken == "PROFILE")
+			{
+				if (tok.next_token(strToken) == Tokenizer::AttributeValue)
+					printf("\nRunning test cases: %s\n",strToken.c_str());
+			}
+		}
+		else if (tok_type == Tokenizer::ElementStart)
+		{
+			if (strToken == "TESTCASES")
+				do_test_cases(tok,strBase);
+			else if (strToken == "TEST")
+				do_test(tok,strBase);
+		}
+		else if (tok_type == Tokenizer::ElementEnd && strToken == "TESTCASES")
+			return;
+	}
+	while (tok_type != Tokenizer::End && tok_type != Tokenizer::Error);
+}
+
+static void do_test_suite(Tokenizer& tok, const OOBase::String& strParent)
+{
+	Tokenizer::TokenType tok_type;
+	do
+	{
+		OOBase::String strToken;
+		tok_type = tok.next_token(strToken);
+
+		if (tok_type == Tokenizer::AttributeName && strToken == "PROFILE")
+		{
+			if (tok.next_token(strToken) == Tokenizer::AttributeValue)
+				printf("\nRunning suite: %s\n",strToken.c_str());
+		}
+		else if (tok_type == Tokenizer::ElementStart && strToken == "TESTCASES")
+			do_test_cases(tok,strParent);
+		else if (tok_type == Tokenizer::ElementEnd && strToken == "TESTSUITE")
+			return;
+	}
+	while (tok_type != Tokenizer::End && tok_type != Tokenizer::Error);
+}
+
+int main( int argc, char* argv[] )
+{
+	OOBase::String path,file;
+	OOBase::Paths::SplitDirAndFilename(argv[1],path,file);
+	OOBase::Paths::AppendDirSeparator(path);
+
+	Tokenizer tok;
+
+	tok.load(argv[1]);
+
+	Tokenizer::TokenType tok_type;
+	do
+	{
+		OOBase::String strToken;
+		tok_type = tok.next_token(strToken);
+
+		if (tok_type == Tokenizer::ElementStart && strToken == "TESTSUITE")
+			do_test_suite(tok,path);
+	}
+	while (tok_type != Tokenizer::End && tok_type != Tokenizer::Error);
+
+	printf("\n%lu passed, %lu failed\n",passed,failed);
 		
 	return 0;
 }

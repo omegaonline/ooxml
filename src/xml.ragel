@@ -19,8 +19,7 @@
 //
 ///////////////////////////////////////////////////////////////////////////////////
 
-#define TOKEN(n) token_type=Tokenizer::n;set_token(strToken);pe=true;
-#define TOKEN2(n,m) token_type=Tokenizer::n;set_token(strToken,m);pe=true;
+#define TOKEN(n) set_token(pe,Tokenizer::n);
 
 %%{
 	machine xml;
@@ -57,18 +56,19 @@
 	                   | 0x4C 0x6F 0x0A7 0x94 @{decoder(Decoder::EBCDIC);} 'l'
 	                   | (0xEF 0xBB 0xBF)? '<?xml';
 
-	Char          =    utf8_char - ((0x00..0x08) | 0x0B | 0x0C | (0x0E..0x1F));  
+	Char          =    utf8_char - ((0x00..0x08) | 0x0B | 0x0C | (0x0E..0x1F) | (0xEF 0xBF 0xBE) | (0xEF 0xBF 0xBF));
+	                   
 	S             =    (0x20 | 0x9 | 0xD | 0xA)+;
 	Eq            =    S? '=' S?;
 	VersionNum    =    ('1.' [0-9]+) $append;
 	VersionInfo   =    S 'version' Eq @{m_token.clear();} ("'" VersionNum "'" | '"' VersionNum '"');
 	EncName       =    ([a-zA-Z] ([a-zA-Z0-9._] | '-')*) $append;
-	EncodingDecl  =    S 'encoding' Eq ('"' EncName '"' | "'" EncName "'" ) @{if (encoding(strToken)) {token_type=Tokenizer::DocumentEncoding;pe=true;}};
+	EncodingDecl  =    S 'encoding' Eq ('"' EncName '"' | "'" EncName "'" ) @{encoding(pe);};
 	SDDecl        =    S 'standalone' Eq (("'" ('yes' @{TOKEN(DocumentStandalone)} | 'no') "'") | ('"' ('yes' @{TOKEN(DocumentStandalone)} | 'no') '"'));
 		                   	
 	XMLDecl       =    XMLPart VersionInfo @{TOKEN(DocumentVersion)} EncodingDecl? SDDecl? S? '?>';
 	
-	Comment       =    '<!--' (Char* -- '--') $append '-->' @{TOKEN2(Comment,1)};
+	Comment       =    '<!--' ((Char - '-') | ('-' (Char - '-')))* $append '-->' @{set_token(pe,Tokenizer::Comment,1);};
 	
 	NameStartChar =    [a-zA-Z:_]
 	                   | 0xC3 (utf8_cont - (0x97 | 0xB7))                          # [#xC0-#xD6] | [#xD8-#xF6] | [#xF8-#xFF]
@@ -104,11 +104,11 @@
 	NSAttName     =    PrefixedAttName | DefaultAttName;
 	
 	PITarget      =    Name - (('X' | 'x') ('M' | 'm') ('L' | 'l'));
-	PI            =    '<?' PITarget $append %{TOKEN(PiTarget)} (S (Char* -- '?>') $append %{TOKEN2(PiData,1)} )? '?>';
+	PI            =    '<?' PITarget $append %{TOKEN(PiTarget)} (S (Char* -- '?>') $append %{set_token(pe,Tokenizer::PiData,1);} )? '?>';
 	
 	Misc          =    Comment | PI | S;
 	
-	SystemLiteral =    ('"' [^"]* ${m_system.push(m_char);} '"') | ("'" [^']* ${m_system.push(m_char);} "'");
+	SystemLiteral =    ('"' (Char - '"')* ${m_system.push(m_char);} '"') | ("'" (Char - "'")* ${m_system.push(m_char);} "'");
 	PubidChar     =    0x20 | 0xD | 0xA | [a-zA-Z0-9] | '-' | ['()+,./:=?;!*#@$_%];
 	PubidLiteral  =    '"' PubidChar* ${m_public.push(m_char);} '"' | "'" (PubidChar - "'")* ${m_public.push(m_char);} "'";
 	ExternalID    =    'SYSTEM' S SystemLiteral | 'PUBLIC' S PubidLiteral S SystemLiteral;
@@ -120,16 +120,17 @@
 	EnumeratedType =   NotationType | Enumeration;
 	AttType       =    StringType | TokenizedType | EnumeratedType;
 	
-	EntityRef     =    '&' (NameStartChar (NameChar)*) $entity ';' @{ if (subst_entity()) fcall extParsedEnt; };
 	CharRef       =    '&#' [0-9]+ $entity ';' @{subst_char(10);} | '&#x' [0-9a-fA-F]+ $entity ';' @{subst_char(16);};
-	Reference     =    EntityRef | CharRef;
-	
-	DeclAttValue  =    '"' ([^<&"] | Reference)*  '"' | "'" ([^<&'] | Reference)* "'";
+	EntityRef     =    '&' (NameStartChar (NameChar)*) $entity ';';
+		
+	DAReference   =    CharRef | EntityRef;
+	DeclAttValue  =    '"' ((Char - [<&"]) | DAReference)*  '"' | "'" ((Char - [<&']) | DAReference)* "'";
 	DefaultDecl   =    '#REQUIRED' | '#IMPLIED' | (('#FIXED' S)? DeclAttValue);
 	AttDef        =    S (QName | NSAttName) S AttType S DefaultDecl;
 	AttlistDecl   =    '<!ATTLIST' S QName AttDef* S? '>';
-	PEReference   =    '%' Name ';';
-	EntityValue   =    '"' ([^%&"] $append | PEReference | Reference)* '"' |  "'" ([^%&'] $append | PEReference | Reference)* "'";
+	PEReference   =    '%' Name $entity ';' @{ if (subst_pentity()) fcall extParsedEnt; };
+	EVReference   =    CharRef | EntityRef @{bypass_entity();};
+	EntityValue   =    '"' ((Char - [%&"]) $append | PEReference | EVReference)* '"' |  "'" ((Char - [%&']) $append | PEReference | EVReference)* "'";
 	NDataDecl     =    S 'NDATA' S Name $entity;
 	EntityDef     =    EntityValue | (ExternalID NDataDecl?);
 	
@@ -141,13 +142,13 @@
 	NotationDecl  =    '<!NOTATION' S Name S (ExternalID | PublicID) S? '>';
 	DeclSep       =    PEReference | S;   
 	
-	AttValue      =    ('"' ([^<&"] $append | Reference)*  '"' | "'" ([^<&'] $append | Reference)* "'") @{TOKEN(AttributeValue)};
+	AttReference  =    CharRef | EntityRef @{if (subst_attr_entity()) fcall AttValueEnt;};
+	AttValue      =    ('"' ((Char - [<&"]) $append | AttReference)* '"' | "'" ((Char - [<&']) $append | AttReference)* "'") @{TOKEN(AttributeValue)};
 	Attribute     =    (NSAttName | QName) $append Eq @{TOKEN(AttributeName)} AttValue;
 	
-	CharData_1    =    ([^<&]* -- ']]>') $append;
-	CharData      =    CharData_1 (Reference CharData_1?)* %{TOKEN(Text)};
+	CharData      =    ((Char - [<&])* -- ']]>') $append %{set_token(pe,Tokenizer::Text,0,false);};
 	
-	CDSect        =    '<![CDATA[' (Char* -- ']]>') $append ']]>' @{TOKEN2(CData,2)};
+	CDSect        =    '<![CDATA[' (Char* -- ']]>') $append ']]>' @{set_token(pe,Tokenizer::CData,2);};
 
 	action choice_point { fcall ch_or_seq1; }
 	ch_or_seq     =    '(' @choice_point;
@@ -163,11 +164,13 @@
 	markupdecl    =    elementdecl | AttlistDecl | EntityDecl | NotationDecl | PI | Comment ;
 	intSubset     =    (markupdecl | DeclSep)*;
 	
-	ETag          =    '</' QName $append %{TOKEN(ElementEnd)} S?;
+	ETag          =    '</' QName $append %{TOKEN(ElementEnd)} S? '>';
 	EStart        =    '<' QName $append %{TOKEN(ElementStart)} (S Attribute)* S?;
 	element       =    EStart ('/>' @{TOKEN(ElementEnd)} | '>' @{fcall content_1;} );
-	content       =    CharData? ((element | CDSect | PI | Comment) CharData?)*;
-	content_1    :=    content ETag '>' @return;
+	
+	CReference    =    CharRef | EntityRef @{unsigned int t=subst_content_entity();if (t==1) fcall intParsedEnt; else if (t==2) fcall extParsedEnt;};
+	content       =    CharData? ((element | CDSect | PI | Comment | CReference ) CharData?)*;
+	content_1    :=    content ETag @return;
 	
 	Ignore        =    Char* -- ('<![' | ']]>');
 	
@@ -183,15 +186,19 @@
 			
 	TextDecl      =    XMLPart VersionInfo? %{m_token.clear();} EncodingDecl S? '?>';
 	
-	action ext_return { IOState::pop(m_io); fret;}
+	action ext_return { printf("entity_return"); entity_return(); fret;}
 	extSubset    :=    TextDecl? extSubsetDecl %{TOKEN(DocTypeEnd)} %ext_return;
 	extParsedEnt :=    TextDecl? content %ext_return;
+	intParsedEnt :=    content >{printf("intParsedEnt\n");} %ext_return;
+	AttValueEnt  :=    ((Char - [<&]) $append | AttReference)* %ext_return;
 	
 	doctypedecl   =    '<!DOCTYPE' S QName $append %{TOKEN(DocTypeStart)} (S ExternalID @{external_doctype();})? S? ('[' intSubset ']' S?)? '>' @{ if (do_doctype()) fcall extSubset; else {TOKEN(DocTypeEnd)}};
 	prolog        =    XMLDecl? Misc* (doctypedecl Misc*)?;
 	document      =    prolog element Misc*;
  
-	main := document @{TOKEN(End)};
+#dump := EntityRef @do_ent "Z";
+	
+	main := document;
 }%%
 
 #include "../src/Tokenizer.h"
@@ -203,25 +210,31 @@ void Tokenizer::do_init()
 	%% write init;
 }
 
-Tokenizer::TokenType Tokenizer::next_token(OOBase::String& strToken)
+Tokenizer::TokenType Tokenizer::next_token(OOBase::String& strToken, int verbose)
 {
 	// Ragel variables
 	Tokenizer&      p   = *this;
-	bool            pe  = false;
 	const EndOfFile eof = EndOfFile();
+	ParseState      pe(strToken);
 			
-	TokenType token_type = Tokenizer::Error;
 	try
 	{
 		%% write exec;
 		
-		//if (m_cs == %%{ write error; }%% || (!pe && m_cs < %%{ write first_final; }%%))
-		//	token_type = Tokenizer::Error;
+		if (!pe.m_halt && m_cs >= %%{ write first_final; }%%)
+			pe.m_type = Tokenizer::End;
+			
+		if (verbose >= 2)
+			printf("m_cs=%d,t=%d,%s\n",m_cs,pe.m_type,strToken.c_str());
+	
+		if (verbose >= 1 && pe.m_type == Tokenizer::Error)
+			printf("Syntax error at %s, line %lu, col %lu\n",m_io->m_fname.c_str(),m_io->m_line,m_io->m_col);
 	}
-	catch (...)
+	catch (const char* e)
 	{
-		token_type = Tokenizer::Error;
+		if (verbose >= 1)
+			printf("%s at %s, line %lu, col %lu\n",e,m_io->m_fname.c_str(),m_io->m_line,m_io->m_col);
 	}
-		
-	return token_type;
+	
+	return pe.m_type;
 }

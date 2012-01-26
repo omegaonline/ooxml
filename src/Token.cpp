@@ -91,11 +91,10 @@ void Token::pop(OOBase::String& str)
 		throw "Out of memory";
 }
 
-void Token::rappend(const OOBase::String& str)
+void Token::rappend(const char* sz)
 {
-	const char* start = str.c_str();
-	const char* end = start + str.length();
+	const char* end = sz + strlen(sz);
 
-	while (end != start)
+	while (end != sz)
 		push(*(--end));
 }

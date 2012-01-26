@@ -41,53 +41,55 @@ static bool do_test(const OOBase::String& strURI)
 	return (tok_type == Tokenizer::End);
 }
 
-static void pass()
+static bool pass()
 {
 	printf("[OK]\n");
 	++passed;
+	return true;
 }
 
-static void fail()
+static bool fail()
 {
-	printf("[Fail]\n");
+	printf("[Fail] ");
 	++failed;
+	return false;
 }
 
-static void do_valid_test(const OOBase::String& strURI)
+static bool do_valid_test(const OOBase::String& strURI)
 {
 	if (!do_test(strURI))
-		fail();
+		return fail();
 	else
-		pass();
+		return pass();
 }
 
-static void do_invalid_test(const OOBase::String& strURI)
+static bool do_invalid_test(const OOBase::String& strURI)
 {
-	if (do_test(strURI))
-		fail();
+	if (!do_test(strURI))
+		return fail();
 	else
-		pass();
+		return pass();
 }
 
-static void do_not_wf_test(const OOBase::String& strURI)
+static bool do_not_wf_test(const OOBase::String& strURI)
 {
 	if (do_test(strURI))
-		fail();
+		return fail();
 	else
-		pass();
+		return pass();
 }
 
-static void do_error_test(const OOBase::String& strURI)
+static bool do_error_test(const OOBase::String& strURI)
 {
 	if (do_test(strURI))
-		fail();
+		return fail();
 	else
-		pass();
+		return pass();
 }
 
 static void do_test(Tokenizer& tok, const OOBase::String& strBase)
 {
-	OOBase::String strType;
+	OOBase::String strType,strText;
 	OOBase::String strURI = strBase;
 	Tokenizer::TokenType tok_type;
 	do
@@ -113,18 +115,28 @@ static void do_test(Tokenizer& tok, const OOBase::String& strBase)
 					strURI.append(strToken.c_str());
 			}
 		}
+		else if (tok_type == Tokenizer::Text)
+		{
+			strText.append(strToken.c_str());
+		}
 		else if (tok_type == Tokenizer::ElementEnd && strToken == "TEST")
 		{
+			bool ret = false;
 			if (strType == "valid")
-				return do_valid_test(strURI);
+				ret = do_valid_test(strURI);
 			else if (strType == "invalid")
-				return do_invalid_test(strURI);
+				ret = do_invalid_test(strURI);
 			else if (strType == "not-wf")
-				return do_not_wf_test(strURI);
+				ret = do_not_wf_test(strURI);
 			else if (strType == "error")
-				return do_error_test(strURI);
+				ret = do_error_test(strURI);
 			else
 				return;
+
+			if (!ret && !strText.empty())
+				printf("%s\n",strText.c_str());
+
+			return;
 		}
 	}
 	while (tok_type != Tokenizer::End && tok_type != Tokenizer::Error);
@@ -200,7 +212,7 @@ int main( int argc, char* argv[] )
 	do
 	{
 		OOBase::String strToken;
-		tok_type = tok.next_token(strToken);
+		tok_type = tok.next_token(strToken,0);
 
 		if (tok_type == Tokenizer::ElementStart && strToken == "TESTSUITE")
 			do_test_suite(tok,path);

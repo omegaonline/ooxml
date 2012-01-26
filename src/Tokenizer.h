@@ -34,11 +34,13 @@ class IOState
 {
 public:
 	IOState(const char* fname);
+	IOState(const char* entity_name, const OOBase::String& repl_text);
 	~IOState();
 
-	unsigned char get_char();
+	unsigned char next_char();
 	bool is_eof() const;
 	static void pop(IOState*& io);
+	void rappend(const char* sz);
 
 	OOBase::String m_fname;
 	size_t         m_col;
@@ -50,7 +52,10 @@ private:
 	IOState(const IOState&);
 	IOState& operator = (const IOState&);
 
+	unsigned char get_char();
+
 	IO*            m_io;
+	Token          m_input;
 };
 
 // Callbacks
@@ -85,7 +90,7 @@ public:
 		CData,
 	};
 
-	TokenType next_token(OOBase::String& strToken);
+	TokenType next_token(OOBase::String& strToken, int verbose = 0);
 
 private:
 	// Ragel members
@@ -96,7 +101,6 @@ private:
 	size_t        m_stacksize;
 	unsigned char m_char;
 
-	Token m_input;
 	Token m_token;
 	Token m_entity_name;
 	Token m_entity;
@@ -130,13 +134,26 @@ private:
 	};
 
 	bool operator == (const EndOfFile&) const
-	{ 
+	{
 		return (m_io == NULL || m_io->is_eof());
 	}
 
-	bool operator == (bool pe) const
+	struct ParseState
 	{
-		return (pe || m_io == NULL || m_io->is_eof());
+		OOBase::String& m_strToken;
+		TokenType       m_type;
+		bool            m_halt;
+
+		ParseState(OOBase::String& t) :
+			m_strToken(t),
+			m_type(Tokenizer::Error),
+			m_halt(false)
+		{}
+	};
+
+	bool operator == (const ParseState& pe) const
+	{
+		return (pe.m_halt || m_io == NULL || m_io->is_eof());
 	}
 		
 	unsigned char operator * () const
@@ -144,7 +161,7 @@ private:
 		return m_char; 
 	}
 	
-	bool encoding(OOBase::String& str);
+	void encoding(ParseState& pe);
 	void decoder(Decoder::eType type);
 
 	void pre_push();
@@ -154,13 +171,17 @@ private:
 
 	void do_init();
 
-	unsigned char next_char_i();
 	void next_char();
-	void set_token(OOBase::String& str, size_t offset = 0);
+	void set_token(ParseState& pe, enum TokenType type, size_t offset = 0, bool allow_empty = true);
 	
+	void bypass_entity();
+	void check_entity_recurse(const OOBase::String& strEnt);
 	void general_entity();
 	void param_entity();
-	bool subst_entity();
+	bool subst_attr_entity();
+	unsigned int subst_content_entity();
+	unsigned int subst_pentity();
+	void entity_return();
 	void subst_char(int base);
 };
 

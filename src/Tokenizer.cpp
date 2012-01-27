@@ -76,6 +76,8 @@ unsigned char IOState::get_char()
 		}
 		while(again);
 	}
+	else
+		printf("EOF input\n");
 
 	return c;
 }

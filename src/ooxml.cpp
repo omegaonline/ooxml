@@ -212,7 +212,7 @@ int main( int argc, char* argv[] )
 	do
 	{
 		OOBase::String strToken;
-		tok_type = tok.next_token(strToken,0);
+		tok_type = tok.next_token(strToken,2);
 
 		if (tok_type == Tokenizer::ElementStart && strToken == "TESTSUITE")
 			do_test_suite(tok,path);

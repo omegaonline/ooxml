@@ -66,7 +66,8 @@
 	EncodingDecl  =    S 'encoding' Eq ('"' EncName '"' | "'" EncName "'" ) @{encoding(pe);};
 	SDDecl        =    S 'standalone' Eq (("'" ('yes' @{TOKEN(DocumentStandalone)} | 'no') "'") | ('"' ('yes' @{TOKEN(DocumentStandalone)} | 'no') '"'));
 		                   	
-	XMLDecl       =    XMLPart VersionInfo @{TOKEN(DocumentVersion)} EncodingDecl? SDDecl? S? '?>';
+	XMLDecl       =    XMLPart @{fcall XMLDecl_i;};
+	XMLDecl_i    :=    VersionInfo @{TOKEN(DocumentVersion)} EncodingDecl? SDDecl? S? '?>' @{fret;};
 	
 	Comment       =    '<!--' @{fcall Comment_i;};
 	Comment_i    :=    ((Char - '-') | ('-' (Char - '-')))* $append '-->' @{set_token(pe,Tokenizer::Comment,1); fret;};
@@ -144,16 +145,15 @@
 	DeclSep       =    PEReference | S;   
 	
 	AttReference  =    CharRef | EntityRef @{if (subst_attr_entity()) fcall AttValueEnt;};
-	AttValue      =    ('"' ((Char - [<&"]) $append | AttReference)* '"' | "'" ((Char - [<&']) $append | AttReference)* "'") @{TOKEN(AttributeValue)};
-	Attribute     =    (NSAttName | QName) $append Eq @{TOKEN(AttributeName)} AttValue;
+	AttValue     :=    ('"' ((Char - [<&"]) $append | AttReference)* '"' | "'" ((Char - [<&']) $append | AttReference)* "'") @{TOKEN(AttributeValue);fret;};
+	Attribute     =    (NSAttName | QName) $append Eq @{TOKEN(AttributeName);fcall AttValue;};
 	
 	CharData      =    ((Char - [<&])* -- ']]>') $append %{set_token(pe,Tokenizer::Text,0,false);};
 	
 	CDSect        =    '<![CDATA[' @{fcall CDSect_i;};
-	CDSect_i     :=    (Char* -- ']]>') $append ']]>' @{set_token(pe,Tokenizer::CData,2); fret;};
+	CDSect_i     :=    (Char* -- ']]>') $append ']]>' @{set_token(pe,Tokenizer::CData,2);fret;};
 
-	action choice_point { fcall ch_or_seq1; }
-	ch_or_seq     =    '(' @choice_point;
+	ch_or_seq     =    '(' @{fcall ch_or_seq1;};
 	cp            =    (QName | ch_or_seq) ('?' | '*' | '+')?;
 	choice        =    S? cp ( S? '|' S? cp )+ S?;
 	seq           =    S? cp ( S? ',' S? cp )* S?;	
@@ -167,17 +167,17 @@
 	intSubset     =    (markupdecl | DeclSep)*;
 	
 	CReference    =    CharRef | EntityRef @{unsigned int t=subst_content_entity();if (t==1) fcall intParsedEnt; else if (t==2) fcall extParsedEnt;};	
-	ETag          =    '</' QName $append @{TOKEN(ElementEnd)} S? '>';
-	element       =    '<' QName $append @{TOKEN(ElementStart);fcall element_1;};
+	ETag          =    '</' QName $append %{TOKEN(ElementEnd)} S? '>';
+	element       =    '<' QName $append %{TOKEN(ElementStart)} (S Attribute)* S? ('/>' @{TOKEN(ElementEnd)} | '>' @{fcall content_i;});
 	content       =    CharData? ((element | CDSect | PI | Comment | CReference ) CharData?)*;
-	element_1    :=    (S Attribute)* S? ('/>' @{TOKEN(ElementEnd)} | '>' content ETag) @return;
+	content_i    :=    content ETag @return;    
 	
 	Ignore        =    Char* -- ('<![' | ']]>');
 	
-	ignoreSectContents = Ignore ('<![' @{ fcall ignoreSectContents_1;} ']]>' Ignore)*;
+	ignoreSectContents = Ignore ('<![' @{fcall ignoreSectContents_1;} ']]>' Ignore)*;
 	ignoreSectContents_1 := ignoreSectContents @return;
 	
-	includeSect   =    '<![' S? 'INCLUDE' S? '[' @{ fcall extSubsetDecl_1;} ']]>';
+	includeSect   =    '<![' S? 'INCLUDE' S? '[' @{fcall extSubsetDecl_1;} ']]>';
 	ignoreSect    =    '<![' S? 'IGNORE' S? '[' ignoreSectContents ']]>';
 	
 	conditionalSect =  includeSect | ignoreSect;
@@ -187,16 +187,17 @@
 	TextDecl      =    XMLPart VersionInfo? %{m_token.clear();} EncodingDecl S? '?>';
 	
 	action ext_return { printf("entity_return\n"); entity_return(); fret;}
-	extSubset    :=    TextDecl? extSubsetDecl %{TOKEN(DocTypeEnd)} %ext_return;
+	extSubset    :=    TextDecl? extSubsetDecl %{TOKEN(DocTypeEnd)} %ext_return %{fret;};
 	extParsedEnt :=    TextDecl? content %ext_return;
 	intParsedEnt :=    content >{printf("intParsedEnt\n");} %ext_return;
 	AttValueEnt  :=    ((Char - [<&]) $append | AttReference)* %ext_return;
 	
-	doctypedecl   =    '<!DOCTYPE' S QName $append @{TOKEN(DocTypeStart)} (S ExternalID @{external_doctype();})? S? ('[' intSubset ']' S?)? '>' @{ if (do_doctype()) fcall extSubset; else {TOKEN(DocTypeEnd)}};
+	doctypedecl   =    '<!DOCTYPE' @{fcall doctypedecl_i;};
+	doctypedecl_i:=    S QName $append %{TOKEN(DocTypeStart)} (S ExternalID @{external_doctype();})? S? ('[' intSubset ']' S?)? '>' @{ if (do_doctype()) fcall extSubset; else {TOKEN(DocTypeEnd);fret;}};
 	prolog        =    XMLDecl? Misc* (doctypedecl Misc*)?;
 	document      =    prolog element Misc*;
  
-	dump := (NSAttName | QName);
+	dump := PI;
 	
 	main := document;
 }%%

@@ -123,14 +123,15 @@
 	CharRef       =    '&#' [0-9]+ $entity ';' @{subst_char(10);} | '&#x' [0-9a-fA-F]+ $entity ';' @{subst_char(16);};
 	EntityRef     =    '&' Name $entity ';';
 		
-	DAReference   =    CharRef | EntityRef;
-	DeclAttValue  =    '"' ((Char - [<&"]) | DAReference)*  '"' | "'" ((Char - [<&']) | DAReference)* "'";
+	AttReference  =    CharRef | EntityRef @{if (subst_attr_entity()) fcall AttValueEnt;};
+	DeclAttValue  =    '"' ((Char - [<&"]) | AttReference)*  '"' | "'" ((Char - [<&']) | AttReference)* "'";
 	DefaultDecl   =    '#REQUIRED' | '#IMPLIED' | (('#FIXED' S)? DeclAttValue);
 	AttDef        =    S (QName | NSAttName) S AttType S DefaultDecl;
 	AttlistDecl   =    '<!ATTLIST' S QName AttDef* S? '>';
-	PEReference   =    '%' Name $entity ';' @{ if (subst_pentity()) fcall extParsedEnt; };
 	EVReference   =    CharRef | EntityRef @{bypass_entity();};
-	EntityValue   =    '"' ((Char - [%&"]) $append | PEReference | EVReference)* '"' |  "'" ((Char - [%&']) $append | PEReference | EVReference)* "'";
+	PEReference   =    '%' Name $entity ';';
+	PEVReference  =    PEReference @{unsigned int t=subst_pentity(); if(t==1) fcall intEntityValueEnt;else if(t==2) fcall extEntityValueEnt;};
+	EntityValue   =    '"' ((Char - [%&"]) $append | PEVReference | EVReference)* '"' |  "'" ((Char - [%&']) $append | PEVReference | EVReference)* "'";
 	NDataDecl     =    S 'NDATA' S Name $entity;
 	EntityDef     =    EntityValue | (ExternalID NDataDecl?);
 	
@@ -140,9 +141,8 @@
 	EntityDecl    =    GEDecl | PEDecl;
 	PublicID      =    'PUBLIC' S PubidLiteral;
 	NotationDecl  =    '<!NOTATION' S Name S (ExternalID | PublicID) S? '>';
-	DeclSep       =    PEReference | S;   
+	DeclSep       =    PEReference @{if (include_pe()); } | S;   
 	
-	AttReference  =    CharRef | EntityRef @{if (subst_attr_entity()) fcall AttValueEnt;};
 	AttValue     :=    S? ('"' ((Char - [<&"]) $append | AttReference)* '"' | "'" ((Char - [<&']) $append | AttReference)* "'") @{TOKEN(AttributeValue);fret;};
 	Attribute     =    (NSAttName | QName) $append S? '=' @{TOKEN(AttributeName);fcall AttValue;};
 	
@@ -160,10 +160,10 @@
 		
 	contentspec   =    'EMPTY' | 'ANY' | Mixed | children;
 	elementdecl   =    '<!ELEMENT' S QName S contentspec S? '>';
-	markupdecl    =    elementdecl | AttlistDecl | EntityDecl | NotationDecl | PI | Comment ;
+	markupdecl    =    elementdecl | AttlistDecl | EntityDecl | NotationDecl | PI | Comment;
 	intSubset     =    (markupdecl | DeclSep)*;
 	
-	CReference    =    CharRef | EntityRef @{unsigned int t=subst_content_entity();if (t==1) fcall intParsedEnt; else if (t==2) fcall extParsedEnt;};	
+	CReference    =    CharRef | EntityRef @{unsigned int t=subst_content_entity();if(t==1) fcall intParsedEnt; else if(t==2) fcall extParsedEnt;};	
 	ETag          =    '</' QName $append %{TOKEN(ElementEnd)} S? '>';
 	element       =    '<' QName $append %{TOKEN(ElementStart)} (S Attribute)* S? ('/>' @{TOKEN(ElementEnd)} | '>' @{fcall content_i;});
 	content       =    CharData? ((element | CDSect | PI | Comment | CReference ) CharData?)*;
@@ -184,9 +184,11 @@
 	
 	action ext_return { external_return(); fret;}
 	extSubset    :=    TextDecl? extSubsetDecl %{TOKEN(DocTypeEnd)} %ext_return;
-	extParsedEnt :=    TextDecl? content %ext_return;
+	extParsedEnt :=    TextDecl? @{fgoto intParsedEnt;};
 	intParsedEnt :=    content %ext_return;
 	AttValueEnt  :=    ((Char - [<&]) $append | AttReference)* %ext_return;
+	extEntityValueEnt := TextDecl? @{fgoto intEntityValueEnt;};
+	intEntityValueEnt := ((Char - [%&]) $append | PEVReference | EVReference)* %ext_return;
 	
 	doctypedecl   =    '<!DOCTYPE' S QName $append %{TOKEN(DocTypeStart)} (S ExternalID @{external_doctype();})? S? ('[' intSubset ']' S?)? '>' @{ if (do_doctype()) fcall extSubset; else {TOKEN(DocTypeEnd)}};
 	prolog        =    XMLDecl? Misc* (doctypedecl Misc*)?;

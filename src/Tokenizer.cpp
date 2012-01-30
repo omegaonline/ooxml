@@ -129,6 +129,7 @@ Tokenizer::Tokenizer() :
 		m_stack(NULL), 
 		m_stacksize(0),
 		m_char('\0'),
+		m_internal_doctype(true),
 		m_io(NULL)
 {
 	struct predef
@@ -179,6 +180,8 @@ void Tokenizer::load(const char* fname)
 	m_system.clear();
 	m_public.clear();
 
+	m_internal_doctype = true;
+
 	m_io = new (std::nothrow) IOState(fname);
 
 	next_char();
@@ -212,6 +215,8 @@ void Tokenizer::decoder(Decoder::eType type)
 	// Apply a temporary decoder to the input stream, before reaching the real encoding value
 	free(m_io->m_decoder);
 	m_io->m_decoder = Decoder::create(type);
+
+	printf("WILL FAIL - NO DECODER!\n");
 }
 
 void Tokenizer::encoding(ParseState& pe)
@@ -314,8 +319,11 @@ void Tokenizer::bypass_entity()
 	if (pExt && !pExt->m_strNData.empty())
 		throw "Unparsed entity reference in entity value";
 
+	m_token.push('&');
 	for (const char* sz = strEnt.c_str();*sz != '\0';++sz)
 		m_token.push(*sz);
+
+	m_token.push(';');
 }
 
 void Tokenizer::check_entity_recurse(const OOBase::String& strEnt)
@@ -340,6 +348,8 @@ unsigned int Tokenizer::subst_content_entity()
 	{
 		OOBase::String strFull;
 		int err = strFull.concat("&",strEnt.c_str());
+		if (err == 0)
+			err = strFull.append(";");
 		if (err != 0)
 			throw "Out of memory";
 
@@ -394,10 +404,12 @@ bool Tokenizer::subst_attr_entity()
 	if (!pInt)
 		throw "External entity in attribute value";
 
-	else if (!pInt->empty())
+	if (!pInt->empty())
 	{
 		OOBase::String strFull;
 		int err = strFull.concat("&",strEnt.c_str());
+		if (err == 0)
+			err = strFull.append(";");
 		if (err != 0)
 			throw "Out of memory";
 
@@ -409,11 +421,9 @@ bool Tokenizer::subst_attr_entity()
 
 		n->m_next = m_io;
 		m_io = n;
-
-		return true;
 	}
 
-	return false;
+	return (!pInt->empty());
 }
 
 unsigned int Tokenizer::subst_pentity()
@@ -424,11 +434,16 @@ unsigned int Tokenizer::subst_pentity()
 	unsigned int r = 0;
 	IOState* n = NULL;
 
+	if (m_internal_doctype)
+		throw "PE in internal subset";
+
 	OOBase::String* pInt = m_int_param_entities.find(strEnt);
 	if (pInt && !pInt->empty())
 	{
 		OOBase::String strFull;
 		int err = strFull.concat("%",strEnt.c_str());
+		if (err == 0)
+			err = strFull.append(";");
 		if (err != 0)
 			throw "Out of memory";
 
@@ -547,9 +562,16 @@ bool Tokenizer::do_doctype()
 		n->m_next = m_io;
 		m_io = n;
 
+		m_internal_doctype = false;
+
 		return true;
 	}
 
+	return false;
+}
+
+bool Tokenizer::include_pe()
+{
 	return false;
 }
 

@@ -106,6 +106,7 @@ private:
 	Token m_entity;
 	Token m_system;
 	Token m_public;
+	bool  m_internal_doctype;
 
 	IOState* m_io;
 
@@ -181,6 +182,7 @@ private:
 	bool subst_attr_entity();
 	unsigned int subst_content_entity();
 	unsigned int subst_pentity();
+	bool include_pe();
 	void external_return();
 	void subst_char(int base);
 };

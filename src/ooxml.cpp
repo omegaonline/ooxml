@@ -21,6 +21,9 @@
 
 #include "Tokenizer.h"
 
+#include <OOBase/Stack.h>
+#include <OOBase/Set.h>
+
 static size_t passed = 0;
 static size_t failed = 0;
 
@@ -28,6 +31,9 @@ static const int verbose = 0;
 
 static bool do_test(const OOBase::String& strURI)
 {
+	OOBase::Stack<OOBase::String> elements;
+	OOBase::Set<OOBase::String> attributes;
+
 	Tokenizer tok;
 
 	tok.load(strURI.c_str());
@@ -37,6 +43,27 @@ static bool do_test(const OOBase::String& strURI)
 	{
 		OOBase::String strToken;
 		tok_type = tok.next_token(strToken,verbose);
+
+		if (tok_type == Tokenizer::ElementStart)
+		{
+			elements.push(strToken);
+			attributes.clear();
+		}
+		else if (tok_type == Tokenizer::AttributeName)
+		{
+			if (attributes.exists(strToken))
+				return false;
+
+			attributes.insert(strToken);
+		}
+		else if (tok_type == Tokenizer::ElementEnd)
+		{
+			OOBase::String strE;
+			elements.pop(&strE);
+
+			if (strE != strToken)
+				return false;
+		}
 	}
 	while (tok_type != Tokenizer::End && tok_type != Tokenizer::Error);
 

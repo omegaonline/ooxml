@@ -33,14 +33,14 @@
 class IOState
 {
 public:
-	IOState(const char* fname);
-	IOState(const char* entity_name, const OOBase::String& repl_text);
+	IOState(const OOBase::String& fname);
+	IOState(const OOBase::String& entity_name, const OOBase::String& repl_text);
 	~IOState();
 
 	unsigned char next_char();
 	bool is_eof() const;
-	static void pop(IOState*& io);
-	void rappend(const char* sz);
+	void rappend(const OOBase::String& str);
+	void push(unsigned char c);
 
 	OOBase::String m_fname;
 	size_t         m_col;
@@ -68,26 +68,26 @@ public:
 	Tokenizer();
 	~Tokenizer();
 	
-	void load(const char* fname);
+	void load(const OOBase::String& fname);
 
 	enum TokenType
 	{
 		Error = 0,
 		End = 1,
-		DocumentStandalone,
-		DocumentVersion,
-		DocumentEncoding,
-		DocTypeStart,
-		DocTypeEnd,
-		ElementStart,
-		ElementEnd,
-		AttributeName,
-		AttributeValue,
-		Text,
-		PiTarget,
-		PiData,
-		Comment,
-		CData,
+		DocumentStandalone = 2,
+		DocumentVersion = 3,
+		DocumentEncoding = 4,
+		DocTypeStart = 5,
+		DocTypeEnd = 6,
+		ElementStart = 7,
+		ElementEnd = 8,
+		AttributeName = 9,
+		AttributeValue = 10,
+		Text = 11,
+		PiTarget = 12,
+		PiData = 13,
+		Comment = 14,
+		CData = 15
 	};
 
 	TokenType next_token(OOBase::String& strToken, int verbose = 0);

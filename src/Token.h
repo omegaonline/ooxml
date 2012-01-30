@@ -41,7 +41,7 @@ public:
 
 	void clear();
 
-	void rappend(const char* sz);
+	void rappend(const OOBase::String& str);
 
 private:
 	Token(const Token&);

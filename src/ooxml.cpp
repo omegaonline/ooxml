@@ -27,7 +27,7 @@
 static size_t passed = 0;
 static size_t failed = 0;
 
-static const int verbose = 0;
+static const int verbose = 2;
 
 static bool do_test(const OOBase::String& strURI)
 {
@@ -36,7 +36,7 @@ static bool do_test(const OOBase::String& strURI)
 
 	Tokenizer tok;
 
-	tok.load(strURI.c_str());
+	tok.load(strURI);
 
 	Tokenizer::TokenType tok_type;
 	do
@@ -61,8 +61,11 @@ static bool do_test(const OOBase::String& strURI)
 			OOBase::String strE;
 			elements.pop(&strE);
 
-			if (strE != strToken)
+			if (!strToken.empty() && strE != strToken)
+			{
+				printf("Mismatched element: %s\n",strToken.c_str());
 				return false;
+			}
 		}
 	}
 	while (tok_type != Tokenizer::End && tok_type != Tokenizer::Error);
@@ -94,7 +97,7 @@ static bool do_valid_test(const OOBase::String& strURI)
 
 static bool do_invalid_test(const OOBase::String& strURI)
 {
-	if (!do_test(strURI))
+	if (do_test(strURI))
 		return fail();
 	else
 		return pass();
@@ -235,7 +238,10 @@ int main( int argc, char* argv[] )
 
 	Tokenizer tok;
 
-	tok.load(argv[1]);
+	OOBase::String strLoad;
+	strLoad.assign(argv[1]);
+
+	tok.load(strLoad);
 
 	Tokenizer::TokenType tok_type;
 	do

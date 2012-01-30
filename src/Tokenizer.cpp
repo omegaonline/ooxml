@@ -21,33 +21,30 @@
 
 #include "Tokenizer.h"
 
-IOState::IOState(const char* fname) :
+IOState::IOState(const OOBase::String& fname) :
+		m_fname(fname),
 		m_col(0),
 		m_line(1),
 		m_decoder(NULL),
 		m_next(NULL),
 		m_io(new (std::nothrow) IO())
 {
-	int err = m_fname.assign(fname);
-	if (err != 0)
+	if (!m_io)
 		throw "Out of memory";
 
-	m_io->open(fname);
+	m_io->open(fname.c_str());
 }
 
-IOState::IOState(const char* entity_name, const OOBase::String& repl_text) :
+IOState::IOState(const OOBase::String& entity_name, const OOBase::String& repl_text) :
+		m_fname(entity_name),
 		m_col(0),
 		m_line(1),
 		m_decoder(NULL),
 		m_next(NULL),
 		m_io(NULL)
 {
-	int err = m_fname.assign(entity_name);
-	if (err != 0)
-		throw "Out of memory";
-
 	m_input.push('\0');
-	m_input.rappend(repl_text.c_str());
+	m_input.rappend(repl_text);
 }
 
 IOState::~IOState()
@@ -80,6 +77,11 @@ unsigned char IOState::get_char()
 	return c;
 }
 
+void IOState::push(unsigned char c)
+{
+	m_input.push(c);
+}
+
 unsigned char IOState::next_char()
 {
 	unsigned char c = get_char();
@@ -104,9 +106,9 @@ unsigned char IOState::next_char()
 	return c;
 }
 
-void IOState::rappend(const char* sz)
+void IOState::rappend(const OOBase::String& str)
 {
-	m_input.rappend(sz);
+	m_input.rappend(str);
 }
 
 bool IOState::is_eof() const
@@ -115,14 +117,6 @@ bool IOState::is_eof() const
 		return false;
 
 	return (!m_io || m_io->is_eof());
-}
-
-void IOState::pop(IOState*& io)
-{
-	IOState* n = io;
-	io = io->m_next;
-	n->m_next = NULL;
-	delete n;
 }
 
 Tokenizer::Tokenizer() : 
@@ -167,7 +161,7 @@ Tokenizer::~Tokenizer()
 	OOBase::HeapAllocator::free(m_stack);
 }
 
-void Tokenizer::load(const char* fname)
+void Tokenizer::load(const OOBase::String& fname)
 {
 	delete m_io;
 	m_io = NULL;
@@ -213,8 +207,11 @@ void Tokenizer::next_char()
 void Tokenizer::decoder(Decoder::eType type)
 {
 	// Apply a temporary decoder to the input stream, before reaching the real encoding value
-	free(m_io->m_decoder);
-	m_io->m_decoder = Decoder::create(type);
+	if (m_io)
+	{
+		free(m_io->m_decoder);
+		m_io->m_decoder = Decoder::create(type);
+	}
 
 	printf("WILL FAIL - NO DECODER!\n");
 }
@@ -224,7 +221,7 @@ void Tokenizer::encoding(ParseState& pe)
 	size_t len = 0;
 	const char* val = m_token.pop(len);
 
-	if (len)
+	if (len && m_io)
 	{
 		// Drop any decoder and use the real decoder
 		delete m_io->m_decoder;
@@ -261,7 +258,7 @@ void Tokenizer::general_entity()
 		if (err == 0)
 			err = m_int_gen_entities.insert(strName,strVal);
 
-		if (err != 0)
+		if (err != 0 && err != EEXIST)
 			throw "Out of memory";
 	}
 	else
@@ -273,7 +270,7 @@ void Tokenizer::general_entity()
 		m_public.pop(ext.m_strPublicId);
 
 		int err = m_ext_gen_entities.insert(strName,ext);
-		if (err != 0)
+		if (err != 0 && err != EEXIST)
 			throw "Out of memory";
 	}
 }
@@ -294,7 +291,7 @@ void Tokenizer::param_entity()
 		if (err == 0)
 			err = m_int_param_entities.insert(strName,strVal);
 
-		if (err != 0)
+		if (err != 0 && err != EEXIST)
 			throw "Out of memory";
 	}
 	else
@@ -305,7 +302,7 @@ void Tokenizer::param_entity()
 		m_public.pop(ext.m_strPublicId);
 
 		int err = m_ext_param_entities.insert(strName,ext);
-		if (err != 0)
+		if (err != 0 && err != EEXIST)
 			throw "Out of memory";
 	}
 }
@@ -355,7 +352,7 @@ unsigned int Tokenizer::subst_content_entity()
 
 		check_entity_recurse(strFull);
 
-		n = new (std::nothrow) IOState(strFull.c_str(),*pInt);
+		n = new (std::nothrow) IOState(strFull,*pInt);
 		if (!n)
 			throw "Out of memory";
 
@@ -378,7 +375,7 @@ unsigned int Tokenizer::subst_content_entity()
 			check_entity_recurse(strExt);
 
 			// Start pulling from external source
-			n = new (std::nothrow) IOState(strExt.c_str());
+			n = new (std::nothrow) IOState(strExt);
 			if (!n)
 				throw "Out of memory";
 
@@ -415,7 +412,7 @@ bool Tokenizer::subst_attr_entity()
 
 		check_entity_recurse(strFull);
 
-		IOState* n = new (std::nothrow) IOState(strFull.c_str(),*pInt);
+		IOState* n = new (std::nothrow) IOState(strFull,*pInt);
 		if (!n)
 			throw "Out of memory";
 
@@ -449,7 +446,7 @@ unsigned int Tokenizer::subst_pentity()
 
 		check_entity_recurse(strFull);
 
-		n = new (std::nothrow) IOState(strFull.c_str(),*pInt);
+		n = new (std::nothrow) IOState(strFull,*pInt);
 		if (!n)
 			throw "Out of memory";
 
@@ -466,7 +463,7 @@ unsigned int Tokenizer::subst_pentity()
 		check_entity_recurse(strExt);
 
 		// Start pulling from external source
-		n = new (std::nothrow) IOState(strExt.c_str());
+		n = new (std::nothrow) IOState(strExt);
 		if (!n)
 			throw "Out of memory";
 
@@ -477,6 +474,61 @@ unsigned int Tokenizer::subst_pentity()
 	{
 		n->m_next = m_io;
 		m_io = n;
+	}
+
+	return r;
+}
+
+bool Tokenizer::include_pe()
+{
+	OOBase::String strEnt;
+	m_entity.pop(strEnt);
+
+	bool r = false;
+	IOState* n = NULL;
+
+	OOBase::String* pInt = m_int_param_entities.find(strEnt);
+	if (pInt && !pInt->empty())
+	{
+		OOBase::String strFull;
+		int err = strFull.concat("%",strEnt.c_str());
+		if (err == 0)
+			err = strFull.append(";");
+		if (err != 0)
+			throw "Out of memory";
+
+		check_entity_recurse(strFull);
+
+		n = new (std::nothrow) IOState(strFull,*pInt);
+		if (!n)
+			throw "Out of memory";
+	}
+	else
+	{
+		External* pExt = m_ext_param_entities.find(strEnt);
+		if (!pExt)
+			throw "Unrecognized entity";
+
+		OOBase::String strExt = resolve_url(m_io->m_fname,pExt->m_strPublicId,pExt->m_strSystemId);
+
+		check_entity_recurse(strExt);
+
+		// Start pulling from external source
+		n = new (std::nothrow) IOState(strExt);
+		if (!n)
+			throw "Out of memory";
+
+		r = true;
+	}
+
+	if (n)
+	{
+		if (m_io)
+			m_io->push(' ');
+
+		n->m_next = m_io;
+		m_io = n;
+		m_io->push(' ');
 	}
 
 	return r;
@@ -549,13 +601,13 @@ void Tokenizer::external_doctype()
 	m_public.pop(strPublicId);
 
 	// We cheat and use m_next here
-	m_io->m_next = new (std::nothrow) IOState(resolve_url(m_io->m_fname,strPublicId,strSystemId).c_str());
+	m_io->m_next = new (std::nothrow) IOState(resolve_url(m_io->m_fname,strPublicId,strSystemId));
 }
 
 bool Tokenizer::do_doctype()
 {
 	// We cheat and use m_next here
-	if (m_io->m_next)
+	if (m_io && m_io->m_next)
 	{
 		IOState* n = m_io->m_next;
 		m_io->m_next = NULL;
@@ -570,15 +622,16 @@ bool Tokenizer::do_doctype()
 	return false;
 }
 
-bool Tokenizer::include_pe()
-{
-	return false;
-}
-
 void Tokenizer::external_return()
 {
-	if (!m_io->is_eof())
-		throw "Not content!";
+	if (m_io)
+	{
+		if (!m_io->is_eof())
+			throw "Not content!";
 
-	IOState::pop(m_io);
+		IOState* n = m_io;
+		m_io = m_io->m_next;
+		n->m_next = NULL;
+		delete n;
+	}
 }

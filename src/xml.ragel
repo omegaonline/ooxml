@@ -141,7 +141,7 @@
 	EntityDecl    =    GEDecl | PEDecl;
 	PublicID      =    'PUBLIC' S PubidLiteral;
 	NotationDecl  =    '<!NOTATION' S Name S (ExternalID | PublicID) S? '>';
-	DeclSep       =    PEReference @{if (include_pe()); } | S;   
+	DeclSep       =    PEReference @{if (include_pe()) fcall extDeclSepEnt; else fcall intDeclSepEnt;} | S;   
 	
 	AttValue     :=    S? ('"' ((Char - [<&"]) $append | AttReference)* '"' | "'" ((Char - [<&']) $append | AttReference)* "'") @{TOKEN(AttributeValue);fret;};
 	Attribute     =    (NSAttName | QName) $append S? '=' @{TOKEN(AttributeName);fcall AttValue;};
@@ -164,10 +164,9 @@
 	intSubset     =    (markupdecl | DeclSep)*;
 	
 	CReference    =    CharRef | EntityRef @{unsigned int t=subst_content_entity();if(t==1) fcall intParsedEnt; else if(t==2) fcall extParsedEnt;};	
-	ETag          =    '</' QName $append %{TOKEN(ElementEnd)} S? '>';
 	element       =    '<' QName $append %{TOKEN(ElementStart)} (S Attribute)* S? ('/>' @{TOKEN(ElementEnd)} | '>' @{fcall content_i;});
-	content       =    CharData? ((element | CDSect | PI | Comment | CReference ) CharData?)*;
-	content_i    :=    content ETag @return;    
+	content       =    CharData? ((element | CDSect | PI | Comment | CReference) CharData?)*;
+	content_i    :=    content '</' @{m_token.clear();} QName $append S? '>' @{TOKEN(ElementEnd);fret;};    
 	
 	Ignore        =    Char* -- ('<![' | ']]>');
 	ignoreSectContents = Ignore ('<![' @{fcall ignoreSectContents_1;} ']]>' Ignore)*;
@@ -184,11 +183,14 @@
 	
 	action ext_return { external_return(); fret;}
 	extSubset    :=    TextDecl? extSubsetDecl %{TOKEN(DocTypeEnd)} %ext_return;
-	extParsedEnt :=    TextDecl? @{fgoto intParsedEnt;};
+	extParsedEnt :=    TextDecl? content %ext_return;
 	intParsedEnt :=    content %ext_return;
 	AttValueEnt  :=    ((Char - [<&]) $append | AttReference)* %ext_return;
-	extEntityValueEnt := TextDecl? @{fgoto intEntityValueEnt;};
-	intEntityValueEnt := ((Char - [%&]) $append | PEVReference | EVReference)* %ext_return;
+	eiEntityValueEnt = ((Char - [%&]) $append | PEVReference | EVReference)*;
+	extEntityValueEnt := TextDecl? eiEntityValueEnt %ext_return;
+	intEntityValueEnt := eiEntityValueEnt %ext_return;
+	extDeclSepEnt:=    TextDecl? extSubsetDecl %ext_return;
+	intDeclSepEnt:=    extSubsetDecl %ext_return;
 	
 	doctypedecl   =    '<!DOCTYPE' S QName $append %{TOKEN(DocTypeStart)} (S ExternalID @{external_doctype();})? S? ('[' intSubset ']' S?)? '>' @{ if (do_doctype()) fcall extSubset; else {TOKEN(DocTypeEnd)}};
 	prolog        =    XMLDecl? Misc* (doctypedecl Misc*)?;

@@ -24,6 +24,8 @@
 static size_t passed = 0;
 static size_t failed = 0;
 
+static const int verbose = 0;
+
 static bool do_test(const OOBase::String& strURI)
 {
 	Tokenizer tok;
@@ -34,7 +36,7 @@ static bool do_test(const OOBase::String& strURI)
 	do
 	{
 		OOBase::String strToken;
-		tok_type = tok.next_token(strToken);
+		tok_type = tok.next_token(strToken,verbose);
 	}
 	while (tok_type != Tokenizer::End && tok_type != Tokenizer::Error);
 
@@ -95,23 +97,23 @@ static void do_test(Tokenizer& tok, const OOBase::String& strBase)
 	do
 	{
 		OOBase::String strToken;
-		tok_type = tok.next_token(strToken);
+		tok_type = tok.next_token(strToken,verbose);
 
 		if (tok_type == Tokenizer::AttributeName)
 		{
 			if (strToken == "ID")
 			{
-				if (tok.next_token(strToken) == Tokenizer::AttributeValue)
+				if (tok.next_token(strToken,verbose) == Tokenizer::AttributeValue)
 					printf("Test: %s...",strToken.c_str());
 			}
 			else if (strToken == "TYPE")
 			{
-				if (tok.next_token(strToken) == Tokenizer::AttributeValue)
+				if (tok.next_token(strToken,verbose) == Tokenizer::AttributeValue)
 					strType = strToken;
 			}
 			else if (strToken == "URI")
 			{
-				if (tok.next_token(strToken) == Tokenizer::AttributeValue)
+				if (tok.next_token(strToken,verbose) == Tokenizer::AttributeValue)
 					strURI.append(strToken.c_str());
 			}
 		}
@@ -149,18 +151,18 @@ static void do_test_cases(Tokenizer& tok, const OOBase::String& strParent)
 	do
 	{
 		OOBase::String strToken;
-		tok_type = tok.next_token(strToken);
+		tok_type = tok.next_token(strToken,verbose);
 
 		if (tok_type == Tokenizer::AttributeName)
 		{
 			if (strToken == "xml:base")
 			{
-				if (tok.next_token(strToken) == Tokenizer::AttributeValue)
+				if (tok.next_token(strToken,verbose) == Tokenizer::AttributeValue)
 					strBase.append(strToken.c_str());
 			}
 			else if (strToken == "PROFILE")
 			{
-				if (tok.next_token(strToken) == Tokenizer::AttributeValue)
+				if (tok.next_token(strToken,verbose) == Tokenizer::AttributeValue)
 					printf("\nRunning test cases: %s\n",strToken.c_str());
 			}
 		}
@@ -183,11 +185,11 @@ static void do_test_suite(Tokenizer& tok, const OOBase::String& strParent)
 	do
 	{
 		OOBase::String strToken;
-		tok_type = tok.next_token(strToken);
+		tok_type = tok.next_token(strToken,verbose);
 
 		if (tok_type == Tokenizer::AttributeName && strToken == "PROFILE")
 		{
-			if (tok.next_token(strToken) == Tokenizer::AttributeValue)
+			if (tok.next_token(strToken,verbose) == Tokenizer::AttributeValue)
 				printf("\nRunning suite: %s\n",strToken.c_str());
 		}
 		else if (tok_type == Tokenizer::ElementStart && strToken == "TESTCASES")
@@ -212,7 +214,7 @@ int main( int argc, char* argv[] )
 	do
 	{
 		OOBase::String strToken;
-		tok_type = tok.next_token(strToken,2);
+		tok_type = tok.next_token(strToken,verbose);
 
 		if (tok_type == Tokenizer::ElementStart && strToken == "TESTSUITE")
 			do_test_suite(tok,path);

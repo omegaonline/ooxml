@@ -181,7 +181,7 @@ private:
 	bool subst_attr_entity();
 	unsigned int subst_content_entity();
 	unsigned int subst_pentity();
-	void entity_return();
+	void external_return();
 	void subst_char(int base);
 };
 

@@ -46,6 +46,7 @@ IOState::IOState(const char* entity_name, const OOBase::String& repl_text) :
 	if (err != 0)
 		throw "Out of memory";
 
+	m_input.push('\0');
 	m_input.rappend(repl_text.c_str());
 }
 
@@ -62,7 +63,6 @@ unsigned char IOState::get_char()
 	if (!m_input.empty())
 	{
 		c = m_input.pop();
-		printf("c = %c\n",c);
 	}
 	else if (m_io)
 	{
@@ -76,8 +76,6 @@ unsigned char IOState::get_char()
 		}
 		while(again);
 	}
-	else
-		printf("EOF input\n");
 
 	return c;
 }
@@ -347,8 +345,6 @@ unsigned int Tokenizer::subst_content_entity()
 
 		check_entity_recurse(strFull);
 
-		printf("%s = %s\n",strEnt.c_str(),pInt->c_str());
-
 		n = new (std::nothrow) IOState(strFull.c_str(),*pInt);
 		if (!n)
 			throw "Out of memory";
@@ -476,8 +472,6 @@ void Tokenizer::subst_char(int base)
 	OOBase::String strEntity;
 	m_entity.pop(strEntity);
 
-	printf("subst_char %s\n",strEntity.c_str());
-
 	unsigned long v = strtoul(strEntity.c_str(),NULL,base);
 
 	// Check for Char (for xml 1.0)
@@ -559,13 +553,10 @@ bool Tokenizer::do_doctype()
 	return false;
 }
 
-void Tokenizer::entity_return()
+void Tokenizer::external_return()
 {
 	if (!m_io->is_eof())
-	{
-		printf("BANG!");
 		throw "Not content!";
-	}
 
 	IOState::pop(m_io);
 }

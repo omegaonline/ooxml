@@ -426,9 +426,6 @@ unsigned int Tokenizer::subst_pentity()
 	unsigned int r = 0;
 	IOState* n = NULL;
 
-	if (m_internal_doctype)
-		throw "PE in internal subset";
-
 	OOBase::String* pInt = m_int_param_entities.find(strEnt);
 	if (pInt)
 	{

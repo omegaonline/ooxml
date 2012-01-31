@@ -166,7 +166,7 @@
 	CReference    =    CharRef | EntityRef @{unsigned int t=subst_content_entity();if(t==1) fcall intParsedEnt; else if(t==2) fcall extParsedEnt;};	
 	element       =    '<' QName $append %{TOKEN(ElementStart)} (S Attribute)* S? ('/>' @{TOKEN(ElementEnd)} | '>' @{fcall content_i;});
 	content       =    CharData? ((element | CDSect | PI | Comment | CReference) CharData?)*;
-	content_i    :=    content '</' @{m_token.clear();} QName $append S? '>' @{TOKEN(ElementEnd);fret;};    
+	content_i    :=    content '</' QName $append S? '>' @{TOKEN(ElementEnd);fret;};    
 	
 	Ignore        =    Char* -- ('<![' | ']]>');
 	ignoreSectContents = Ignore ('<![' @{fcall ignoreSectContents_1;} ']]>' Ignore)*;

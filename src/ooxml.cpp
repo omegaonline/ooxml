@@ -33,6 +33,8 @@ static bool do_test(const OOBase::String& strURI)
 {
 	OOBase::Stack<OOBase::String> elements;
 	OOBase::Set<OOBase::String> attributes;
+	OOBase::String strDocType;
+	bool dt = false;
 
 	Tokenizer tok;
 
@@ -44,8 +46,21 @@ static bool do_test(const OOBase::String& strURI)
 		OOBase::String strToken;
 		tok_type = tok.next_token(strToken,verbose);
 
-		if (tok_type == Tokenizer::ElementStart)
+		if (tok_type == Tokenizer::DocTypeStart)
 		{
+			strDocType = strToken;
+			dt = true;
+		}
+		else if (tok_type == Tokenizer::ElementStart)
+		{
+			if (dt)
+			{
+				if (strToken != strDocType)
+					return false;
+
+				dt = false;
+			}
+
 			elements.push(strToken);
 			attributes.clear();
 		}
@@ -62,10 +77,7 @@ static bool do_test(const OOBase::String& strURI)
 			elements.pop(&strE);
 
 			if (!strToken.empty() && strE != strToken)
-			{
-				printf("Mismatched element: %s\n",strToken.c_str());
 				return false;
-			}
 		}
 	}
 	while (tok_type != Tokenizer::End && tok_type != Tokenizer::Error);

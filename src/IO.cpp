@@ -51,11 +51,11 @@ unsigned char IO::get_char()
 	unsigned char c = '\0';
 	if (m_f)
 	{
-		if (fread(&c,sizeof(c),1,m_f) != 1)
-		{
-			//if (feof(m_f))
-				m_eof = true;
-		}
+		size_t r = fread(&c,sizeof(c),1,m_f);
+		if (r == 0)
+			m_eof = true;
+		else if (r == (size_t)-1)
+			throw "IO Error";
 	}
 	return c;
 }

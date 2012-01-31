@@ -55,6 +55,7 @@ private:
 	unsigned char get_char();
 
 	IO*            m_io;
+	bool           m_eof;
 	Token          m_input;
 };
 

@@ -29,6 +29,7 @@ class Decoder
 public:
 	enum eType
 	{
+		None = 0,
 		UTF32LE,
 		UTF32BE,
 		UTF16LE,

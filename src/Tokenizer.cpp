@@ -78,7 +78,7 @@ void Tokenizer::load(const OOBase::String& fname)
 
 	m_internal_doctype = true;
 
-	m_io = new (std::nothrow) IOState(fname);
+	m_io = new (std::nothrow) IOState(fname,false);
 
 	next_char();
 }
@@ -110,18 +110,8 @@ void Tokenizer::next_char()
 		else
 			break;
 	}
-}
 
-void Tokenizer::decoder(Decoder::eType type)
-{
-	// Apply a temporary decoder to the input stream, before reaching the real encoding value
-	if (m_io)
-	{
-		free(m_io->m_decoder);
-		m_io->m_decoder = Decoder::create(type);
-	}
-
-	printf("WILL FAIL - NO DECODER!\n");
+	//printf("c = %c (%x)\n",m_char,m_char);
 }
 
 void Tokenizer::encoding(ParseState& pe)
@@ -132,8 +122,7 @@ void Tokenizer::encoding(ParseState& pe)
 	if (len && m_io)
 	{
 		// Drop any decoder and use the real decoder
-		delete m_io->m_decoder;
-		m_io->m_decoder = NULL;
+		m_io->clear_decoder();
 
 		if (!m_io->m_next)
 		{
@@ -276,7 +265,7 @@ unsigned int Tokenizer::subst_content_entity()
 			check_entity_recurse(strExt);
 
 			// Start pulling from external source
-			n = new (std::nothrow) IOState(strExt);
+			n = new (std::nothrow) IOState(strExt,false);
 			if (!n)
 				throw "Out of memory";
 
@@ -367,7 +356,7 @@ unsigned int Tokenizer::subst_pentity()
 		check_entity_recurse(strExt);
 
 		// Start pulling from external source
-		n = new (std::nothrow) IOState(strExt);
+		n = new (std::nothrow) IOState(strExt,false);
 		if (!n)
 			throw "Out of memory";
 
@@ -420,7 +409,7 @@ bool Tokenizer::include_pe(bool auto_pop)
 		check_entity_recurse(strExt);
 
 		// Start pulling from external source
-		n = new (std::nothrow) IOState(strExt);
+		n = new (std::nothrow) IOState(strExt,true);
 		if (!n)
 			throw "Out of memory";
 
@@ -436,7 +425,6 @@ bool Tokenizer::include_pe(bool auto_pop)
 
 		n->m_next = m_io;
 		m_io = n;
-		m_io->push(' ');
 	}
 
 	return r;
@@ -509,7 +497,7 @@ void Tokenizer::external_doctype()
 	m_public.pop(strPublicId);
 
 	// We cheat and use m_next here
-	m_io->m_next = new (std::nothrow) IOState(resolve_url(m_io->m_fname,strPublicId,strSystemId));
+	m_io->m_next = new (std::nothrow) IOState(resolve_url(m_io->m_fname,strPublicId,strSystemId),false);
 }
 
 bool Tokenizer::do_doctype()

@@ -49,13 +49,6 @@
     utf8_four_byte           = utf8_four_byte_basic - utf8_four_byte_overlong - utf8_four_byte_reserved;
     utf8_char                = (utf8_one_byte | utf8_two_byte | utf8_three_byte | utf8_four_byte);
 	
-	XMLPart       =    (0xFF 0xFE 0x00 0x00)? 0x00 0x00 0x00 0x3C @{decoder(Decoder::UTF32LE);} '?xml'   
-	                   | (0x00 0x00 0xFE 0xFF)? 0x3C 0x00 0x00 0x00 @{decoder(Decoder::UTF32BE);} '?xml'
-	                   | (0xFE 0xFF)? 0x00 0x3C 0x00 0x03F @{decoder(Decoder::UTF16BE);} 'xml'
-	                   | (0xFF 0xFE)? 0x3C 0x00 0x03F 0x00 @{decoder(Decoder::UTF16LE);} 'xml'
-	                   | 0x4C 0x6F 0x0A7 0x94 @{decoder(Decoder::EBCDIC);} 'l'
-	                   | (0xEF 0xBB 0xBF)? '<?xml';
-
 	Char          =    utf8_char - ((0x00..0x08) | 0x0B | 0x0C | (0x0E..0x1F) | (0xEF 0xBF 0xBE) | (0xEF 0xBF 0xBF));
 	                   
 	S             =    (0x20 | 0x9 | 0xD | 0xA)+;
@@ -67,7 +60,7 @@
 	SDDecl        =    S 'standalone' Eq (("'" ('yes' @{TOKEN(DocumentStandalone)} | 'no') "'") | ('"' ('yes' @{TOKEN(DocumentStandalone)} | 'no') '"'));
 		                   	
    	XMLDecl_i    :=    VersionInfo @{TOKEN(DocumentVersion)} EncodingDecl? SDDecl? S? '?>' @return;
-	XMLDecl       =    XMLPart @{m_token.clear();fcall XMLDecl_i;};
+	XMLDecl       =    '<?xml' @{m_token.clear();fcall XMLDecl_i;};
 		
 	Comment       =    '<!--' @{fcall Comment_i;};
 	Comment_i    :=    ((Char - '-') | ('-' (Char - '-')))* $append '-->' @{set_token(pe,Tokenizer::Comment,1);fret;};
@@ -177,7 +170,7 @@
 	
 	CReference    =    CharRef | EntityRef @{unsigned int t=subst_content_entity();if(t==1) fcall intParsedEnt; else if(t==2) fcall extParsedEnt;};	
 	element       =    '<' QName $append %{TOKEN(ElementStart)} (S Attribute)* S? ('/>' @{TOKEN(ElementEnd)} | '>' @{fcall content_i;});
-	content       =    CharData? ((element | CDSect | PI | Comment | CReference) CharData?)*;
+	content       =    CharData ((element | CDSect | PI | Comment | CReference) CharData)*;
 	content_i    :=    content '</' QName $append S? '>' @{TOKEN(ElementEnd);fret;};    
 	
 	Ignore        =    Char* -- ('<![' | ']]>');
@@ -192,7 +185,7 @@
 	extSubsetDecl =    (markupdecl | conditionalSect | DeclSep)*;
 	includeSect_i :=   extSubsetDecl ']]>' @return;
 			
-	TextDecl      =    XMLPart @{m_token.clear();} VersionInfo? EncodingDecl S? '?>';
+	TextDecl      =    '<?xml' @{m_token.clear();} VersionInfo? EncodingDecl S? '?>';
 	
 	action ext_return { io_pop(); fret;}
 	extSubset    :=    (TextDecl? extSubsetDecl) %{TOKEN(DocTypeEnd)} %ext_return;

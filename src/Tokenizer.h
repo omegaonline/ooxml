@@ -133,7 +133,6 @@ private:
 	}
 	
 	void encoding(ParseState& pe);
-	void decoder(Decoder::eType type);
 
 	void pre_push();
 

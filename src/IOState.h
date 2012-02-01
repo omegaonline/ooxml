@@ -31,7 +31,7 @@
 class IOState
 {
 public:
-	IOState(const OOBase::String& fname);
+	IOState(const OOBase::String& fname, bool pre_space);
 	IOState(const OOBase::String& entity_name, const OOBase::String& repl_text);
 	~IOState();
 
@@ -39,11 +39,11 @@ public:
 	bool is_eof() const;
 	void rappend(const OOBase::String& str);
 	void push(unsigned char c);
+	void clear_decoder();
 
 	OOBase::String m_fname;
 	size_t         m_col;
 	size_t         m_line;
-	Decoder*       m_decoder;
 	IOState*       m_next;
 	bool           m_auto_pop;
 
@@ -53,9 +53,11 @@ private:
 
 	unsigned char get_char();
 
+	Decoder*       m_decoder;
 	IO*            m_io;
 	bool           m_eof;
 	Token          m_input;
+	Token          m_bom_input;
 };
 
 #endif // IOSTATE_H_INCLUDED_

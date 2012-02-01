@@ -179,6 +179,7 @@ Decoder* Decoder::create(eType type)
 		ret = new (std::nothrow) EBCDICDecoder();
 		break;
 
+	case None:
 	default:
 		return NULL;
 	}

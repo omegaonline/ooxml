@@ -21,106 +21,6 @@
 
 #include "Tokenizer.h"
 
-IOState::IOState(const OOBase::String& fname) :
-		m_fname(fname),
-		m_col(0),
-		m_line(1),
-		m_decoder(NULL),
-		m_next(NULL),
-		m_io(new (std::nothrow) IO()),
-		m_eof(false)
-{
-	if (!m_io)
-		throw "Out of memory";
-
-	m_io->open(fname.c_str());
-}
-
-IOState::IOState(const OOBase::String& entity_name, const OOBase::String& repl_text) :
-		m_fname(entity_name),
-		m_col(0),
-		m_line(1),
-		m_decoder(NULL),
-		m_next(NULL),
-		m_io(NULL),
-		m_eof(repl_text.empty())
-{
-	m_input.rappend(repl_text);
-}
-
-IOState::~IOState()
-{
-	delete m_decoder;
-	delete m_io;
-	delete m_next;
-}
-
-unsigned char IOState::get_char()
-{
-	unsigned char c = '\0';
-	if (!m_input.empty())
-	{
-		c = m_input.pop();
-	}
-	else if (m_io)
-	{
-		bool again = false;
-		do
-		{
-			c = m_io->get_char();
-
-			if (m_decoder)
-				c = m_decoder->next(c,again);
-		}
-		while(again);
-
-		m_eof = m_io->is_eof();
-	}
-	else
-		m_eof = true;
-
-	return c;
-}
-
-void IOState::push(unsigned char c)
-{
-	m_input.push(c);
-}
-
-unsigned char IOState::next_char()
-{
-	unsigned char c = get_char();
-	if (c == '\r')
-	{
-		c = '\n';
-
-		unsigned char n = get_char();
-		if (n != '\n')
-			m_input.push(n);
-	}
-
-	if (c == '\n')
-	{
-		++m_line;
-		m_col = 0;
-	}
-
-	if (c != '\0')
-		++m_col;
-
-	return c;
-}
-
-void IOState::rappend(const OOBase::String& str)
-{
-	m_input.rappend(str);
-}
-
-bool IOState::is_eof() const
-{
-	return m_eof;
-}
-
 Tokenizer::Tokenizer() : 
 		m_stack(NULL), 
 		m_stacksize(0),
@@ -200,10 +100,16 @@ void Tokenizer::pre_push()
 
 void Tokenizer::next_char()
 {
-	if (m_io)
+	m_char = '\0';
+
+	while (m_io)
+	{
 		m_char = m_io->next_char();
-	else
-		m_char = '\0';
+		if (m_io->is_eof() && m_io->m_auto_pop)
+			io_pop();
+		else
+			break;
+	}
 }
 
 void Tokenizer::decoder(Decoder::eType type)
@@ -620,7 +526,7 @@ bool Tokenizer::do_doctype()
 	return false;
 }
 
-void Tokenizer::external_return()
+void Tokenizer::io_pop()
 {
 	if (m_io)
 	{

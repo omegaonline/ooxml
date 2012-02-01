@@ -181,7 +181,7 @@
 			
 	TextDecl      =    XMLPart VersionInfo? %{m_token.clear();} EncodingDecl S? '?>';
 	
-	action ext_return { external_return(); fret;}
+	action ext_return { io_pop(); fret;}
 	extSubset    :=    TextDecl? extSubsetDecl %{TOKEN(DocTypeEnd)} %ext_return;
 	extParsedEnt :=    TextDecl? content %ext_return;
 	intParsedEnt :=    content %ext_return;

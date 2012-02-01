@@ -26,38 +26,7 @@
 #include <OOBase/String.h>
 #include <OOBase/HashTable.h>
 
-#include "Token.h"
-#include "Decoder.h"
-#include "IO.h"
-
-class IOState
-{
-public:
-	IOState(const OOBase::String& fname);
-	IOState(const OOBase::String& entity_name, const OOBase::String& repl_text);
-	~IOState();
-
-	unsigned char next_char();
-	bool is_eof() const;
-	void rappend(const OOBase::String& str);
-	void push(unsigned char c);
-
-	OOBase::String m_fname;
-	size_t         m_col;
-	size_t         m_line;
-	Decoder*       m_decoder;
-	IOState*       m_next;
-
-private:
-	IOState(const IOState&);
-	IOState& operator = (const IOState&);
-
-	unsigned char get_char();
-
-	IO*            m_io;
-	bool           m_eof;
-	Token          m_input;
-};
+#include "IOState.h"
 
 // Callbacks
 
@@ -184,7 +153,7 @@ private:
 	unsigned int subst_content_entity();
 	unsigned int subst_pentity();
 	bool include_pe();
-	void external_return();
+	void io_pop();
 	void subst_char(int base);
 };
 

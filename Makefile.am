@@ -69,6 +69,8 @@ ooxml_SOURCES = \
 	src/Decoder.cpp \
 	src/IO.h \
 	src/IO.cpp \
+	src/IOState.h \
+	src/IOState.cpp \
 	src/Tokenizer.h \
 	src/Tokenizer.cpp \
 	src/Token.h \

@@ -61,14 +61,16 @@
 	S             =    (0x20 | 0x9 | 0xD | 0xA)+;
 	Eq            =    S? '=' S?;
 	VersionNum    =    ('1.' [0-9]+) $append;
-	VersionInfo   =    S 'version' Eq @{m_token.clear();} ("'" VersionNum "'" | '"' VersionNum '"');
+	VersionInfo   =    S 'version' Eq ("'" VersionNum "'" | '"' VersionNum '"');
 	EncName       =    ([a-zA-Z] ([a-zA-Z0-9._] | '-')*) $append;
 	EncodingDecl  =    S 'encoding' Eq ('"' EncName '"' | "'" EncName "'" ) @{encoding(pe);};
 	SDDecl        =    S 'standalone' Eq (("'" ('yes' @{TOKEN(DocumentStandalone)} | 'no') "'") | ('"' ('yes' @{TOKEN(DocumentStandalone)} | 'no') '"'));
 		                   	
-	XMLDecl       =    XMLPart VersionInfo @{TOKEN(DocumentVersion)} EncodingDecl? SDDecl? S? '?>';
+   	XMLDecl_i    :=    VersionInfo @{TOKEN(DocumentVersion)} EncodingDecl? SDDecl? S? '?>' @return;
+	XMLDecl       =    XMLPart @{m_token.clear();fcall XMLDecl_i;};
 		
-	Comment       =    '<!--' ((Char - '-') | ('-' (Char - '-')))* $append '-->' @{set_token(pe,Tokenizer::Comment,1);};
+	Comment       =    '<!--' @{fcall Comment_i;};
+	Comment_i    :=    ((Char - '-') | ('-' (Char - '-')))* $append '-->' @{set_token(pe,Tokenizer::Comment,1);fret;};
 		
 	NameStartChar =    [a-zA-Z:_]
 	                   | 0xC3 (utf8_cont - (0x97 | 0xB7))                          # [#xC0-#xD6] | [#xD8-#xF6] | [#xF8-#xFF]
@@ -104,8 +106,8 @@
 	NSAttName     =    PrefixedAttName | DefaultAttName;
 	
 	PITarget      =    Name - (('X' | 'x') ('M' | 'm') ('L' | 'l'));
-	PI            =    '<?' PITarget $append %{TOKEN(PiTarget)} (S (Char* -- '?>') $append )? '?>' @{set_token(pe,Tokenizer::PiData,1);};
-		
+	PI            =    '<?' PITarget $append (S (Char* -- '?>') $append )? '?>' @{set_token(pe,Tokenizer::PiData,1);};
+			
 	Misc          =    Comment | PI | S;
 	
 	SystemLiteral =    ('"' (Char - '"')* ${m_system.push(m_char);} '"') | ("'" (Char - "'")* ${m_system.push(m_char);} "'");
@@ -122,44 +124,54 @@
 	
 	CharRef       =    '&#' [0-9]+ $entity ';' @{subst_char(10);} | '&#x' [0-9a-fA-F]+ $entity ';' @{subst_char(16);};
 	EntityRef     =    '&' Name $entity ';';
+	PEReference   =    '%' Name $entity ';';
+	
+	extPS         =    (PEReference @{include_pe(true);})? S (PEReference @{include_pe(true);} S)*;
+	PS            =    (extPS when {!m_internal_doctype}) | S;
 		
 	AttReference  =    CharRef | EntityRef @{if (subst_attr_entity()) fcall AttValueEnt;};
 	DeclAttValue  =    '"' ((Char - [<&"]) | AttReference)*  '"' | "'" ((Char - [<&']) | AttReference)* "'";
-	DefaultDecl   =    '#REQUIRED' | '#IMPLIED' | (('#FIXED' S)? DeclAttValue);
-	AttDef        =    S (QName | NSAttName) S AttType S DefaultDecl;
-	AttlistDecl   =    '<!ATTLIST' S QName AttDef* S? '>';
+	DefaultDecl   =    '#REQUIRED' | '#IMPLIED' | (('#FIXED' PS)? DeclAttValue);
+	AttDef        =    PS (QName | NSAttName) PS AttType PS DefaultDecl;
+	AttlistDecl_i :=   PS QName AttDef* PS? '>' @return;
+	AttlistDecl   =    '<!ATTLIST' @{fcall AttlistDecl_i;};
+	
 	EVReference   =    CharRef | EntityRef @{bypass_entity();};
-	PEReference   =    '%' Name $entity ';';
 	PEVReference  =    PEReference @{unsigned int t=subst_pentity(); if(t==1) fcall intEntityValueEnt;else if(t==2) fcall extEntityValueEnt;};
 	EntityValue   =    '"' ((Char - [%&"]) $append | PEVReference | EVReference)* '"' |  "'" ((Char - [%&']) $append | PEVReference | EVReference)* "'";
-	NDataDecl     =    S 'NDATA' S Name $entity;
+	NDataDecl     =    PS 'NDATA' PS Name $entity;
 	EntityDef     =    EntityValue | (ExternalID NDataDecl?);
-	
-	GEDecl        =    '<!ENTITY' S Name $entity_name S EntityDef S? '>' @{general_entity();};
+	GEDecl        =    Name $entity_name PS EntityDef PS? '>' @{general_entity();fret;};
 	PEDef         =    EntityValue | ExternalID;
-	PEDecl        =    '<!ENTITY' S '%' S Name $entity_name S PEDef S? '>' @{param_entity();};
-	EntityDecl    =    GEDecl | PEDecl;
+	PEDecl        =    '%' PS Name $entity_name PS PEDef PS? '>' @{param_entity();fret;};
+	EntityDecl_i :=    PS (GEDecl | PEDecl);
+	EntityDecl    =    '<!ENTITY' @{fcall EntityDecl_i;};
+	
 	PublicID      =    'PUBLIC' S PubidLiteral;
-	NotationDecl  =    '<!NOTATION' S Name S (ExternalID | PublicID) S? '>';
-	DeclSep       =    PEReference @{if (include_pe()) fcall extDeclSepEnt; else fcall intDeclSepEnt;} | S;   
+	NotationDecl_i :=  PS Name PS (ExternalID | PublicID) PS? '>' @return;
+	NotationDecl  =    '<!NOTATION' @{fcall NotationDecl_i;};
+	
+	DeclSep       =    PEReference @{if (include_pe(false)) fcall extDeclSepEnt; else fcall intDeclSepEnt;} | S;   
 	
 	AttValue     :=    S? ('"' ((Char - [<&"]) $append | AttReference)* '"' | "'" ((Char - [<&']) $append | AttReference)* "'") @{TOKEN(AttributeValue);fret;};
 	Attribute     =    (NSAttName | QName) $append S? '=' @{TOKEN(AttributeName);fcall AttValue;};
 	
 	CharData      =    ((Char - [<&])* -- ']]>') $append %{set_token(pe,Tokenizer::Text,0,false);};
 	
-	CDSect        =    '<![CDATA[' (Char* -- ']]>') $append ']]>' @{set_token(pe,Tokenizer::CData,2);};
+	CDSect_i     :=    (Char* -- ']]>') $append ']]>' @{set_token(pe,Tokenizer::CData,2);fret;};
+	CDSect        =    '<![CDATA[' @{fcall CDSect_i;};
 	
 	ch_or_seq     =    '(' @{fcall ch_or_seq1;};
 	cp            =    (QName | ch_or_seq) ('?' | '*' | '+')?;
-	choice        =    S? cp ( S? '|' S? cp )+ S?;
-	seq           =    S? cp ( S? ',' S? cp )* S?;	
+	choice        =    PS? cp ( PS? '|' PS? cp )+ PS?;
+	seq           =    PS? cp ( PS? ',' PS? cp )* PS?;	
 	ch_or_seq1   :=    (choice | seq) ')' @return;
-	children      =    '(' S? (choice | seq) ')' ('?' | '*' | '+')?;
-	Mixed         =    '(' S? '#PCDATA' ((S? '|' S? QName)* S? ')*' | S? ')');
-		
+	children      =    '(' PS? (choice | seq) ')' ('?' | '*' | '+')?;
+	Mixed         =    '(' PS? '#PCDATA' ((PS? '|' PS? QName)* PS? ')*' | PS? ')');
 	contentspec   =    'EMPTY' | 'ANY' | Mixed | children;
-	elementdecl   =    '<!ELEMENT' S QName S contentspec S? '>';
+	elementdecl_i :=   PS QName PS contentspec PS? '>' @return;
+	elementdecl   =    '<!ELEMENT' @{fcall elementdecl_i;};
+	
 	markupdecl    =    elementdecl | AttlistDecl | EntityDecl | NotationDecl | PI | Comment;
 	intSubset     =    (markupdecl | DeclSep)*;
 	
@@ -169,37 +181,45 @@
 	content_i    :=    content '</' QName $append S? '>' @{TOKEN(ElementEnd);fret;};    
 	
 	Ignore        =    Char* -- ('<![' | ']]>');
-	ignoreSectContents = Ignore ('<![' @{fcall ignoreSectContents_1;} ']]>' Ignore)*;
-	ignoreSectContents_1 := ignoreSectContents @return;
+	ignoreSectContents = Ignore ('<![' @{fcall ignoreSectContents_i;} ']]>' Ignore)*;
+	ignoreSectContents_i := ignoreSectContents %return;
 	
-	includeSect   =    '<![' S? 'INCLUDE' S? '[' @{fcall extSubsetDecl_1;} ']]>';
-	ignoreSect    =    '<![' S? 'IGNORE' S? '[' ignoreSectContents ']]>';
+	includeSect   =    'INCLUDE' PS? '[' @{fgoto includeSect_i;};
+	ignoreSect    =    'IGNORE' PS? '[' ignoreSectContents ']]>' @return;
 	
-	conditionalSect =  includeSect | ignoreSect;
+	conditionalSect =  '<![' @{fcall conditionalSect_i;};
+	conditionalSect_i := PS? (includeSect | ignoreSect);
 	extSubsetDecl =    (markupdecl | conditionalSect | DeclSep)*;
-	extSubsetDecl_1 := extSubsetDecl %return;
+	includeSect_i :=   extSubsetDecl ']]>' @return;
 			
-	TextDecl      =    XMLPart VersionInfo? %{m_token.clear();} EncodingDecl S? '?>';
+	TextDecl      =    XMLPart @{m_token.clear();} VersionInfo? EncodingDecl S? '?>';
 	
 	action ext_return { io_pop(); fret;}
-	extSubset    :=    TextDecl? extSubsetDecl %{TOKEN(DocTypeEnd)} %ext_return;
-	extParsedEnt :=    TextDecl? content %ext_return;
+	extSubset    :=    (TextDecl? extSubsetDecl) %{TOKEN(DocTypeEnd)} %ext_return;
+	extParsedEnt :=    (TextDecl? content) %ext_return;
 	intParsedEnt :=    content %ext_return;
 	AttValueEnt  :=    ((Char - [<&]) $append | AttReference)* %ext_return;
 	eiEntityValueEnt = ((Char - [%&]) $append | PEVReference | EVReference)*;
-	extEntityValueEnt := TextDecl? eiEntityValueEnt %ext_return;
+	extEntityValueEnt := (TextDecl? eiEntityValueEnt) %ext_return;
 	intEntityValueEnt := eiEntityValueEnt %ext_return;
-	extDeclSepEnt:=    TextDecl? extSubsetDecl %ext_return;
+	extDeclSepEnt:=    (TextDecl? extSubsetDecl) %ext_return;
 	intDeclSepEnt:=    extSubsetDecl %ext_return;
 	
-	doctypedecl   =    '<!DOCTYPE' S QName $append %{TOKEN(DocTypeStart)} (S ExternalID @{external_doctype();})? S? ('[' intSubset ']' S?)? '>' @{ if (do_doctype()) fcall extSubset; else {TOKEN(DocTypeEnd)}};
+	intSubset_i  :=    intSubset ']' @return;
+	
+	doctypedecl   =    '<!DOCTYPE' S QName $append %{TOKEN(DocTypeStart)} (S ExternalID @{external_doctype();})? S? ('[' @{fcall intSubset_i;} S?)? '>' @{ if (do_doctype()) fcall extSubset; else {TOKEN(DocTypeEnd)}};
 	prolog        =    XMLDecl? Misc* (doctypedecl Misc*)?;
 	document      =    prolog element Misc*;
  
 	main := document;
+	
+	dump := PS;
 }%%
 
 #include "../src/Tokenizer.h"
+
+// Ragel does silly things with signed and unsigned short
+#define short unsigned short
 
 %% write data;
 

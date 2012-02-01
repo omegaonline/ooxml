@@ -152,7 +152,7 @@ private:
 	bool subst_attr_entity();
 	unsigned int subst_content_entity();
 	unsigned int subst_pentity();
-	bool include_pe();
+	bool include_pe(bool auto_pop);
 	void io_pop();
 	void subst_char(int base);
 };

@@ -332,6 +332,9 @@ unsigned int Tokenizer::subst_pentity()
 	unsigned int r = 0;
 	IOState* n = NULL;
 
+	if (m_internal_doctype)
+		throw "PE in Internal Subset";
+
 	OOBase::String* pInt = m_int_param_entities.find(strEnt);
 	if (pInt)
 	{
@@ -380,7 +383,7 @@ unsigned int Tokenizer::subst_pentity()
 	return r;
 }
 
-bool Tokenizer::include_pe()
+bool Tokenizer::include_pe(bool auto_pop)
 {
 	OOBase::String strEnt;
 	m_entity.pop(strEnt);
@@ -391,21 +394,20 @@ bool Tokenizer::include_pe()
 	OOBase::String* pInt = m_int_param_entities.find(strEnt);
 	if (pInt)
 	{
-		if (!pInt->empty())
-		{
-			OOBase::String strFull;
-			int err = strFull.concat("%",strEnt.c_str());
-			if (err == 0)
-				err = strFull.append(";");
-			if (err != 0)
-				throw "Out of memory";
+		OOBase::String strFull;
+		int err = strFull.concat("%",strEnt.c_str());
+		if (err == 0)
+			err = strFull.append(";");
+		if (err != 0)
+			throw "Out of memory";
 
-			check_entity_recurse(strFull);
+		check_entity_recurse(strFull);
 
-			n = new (std::nothrow) IOState(strFull,*pInt);
-			if (!n)
-				throw "Out of memory";
-		}
+		n = new (std::nothrow) IOState(strFull,*pInt);
+		if (!n)
+			throw "Out of memory";
+
+		n->m_auto_pop = auto_pop;
 	}
 	else
 	{
@@ -421,6 +423,8 @@ bool Tokenizer::include_pe()
 		n = new (std::nothrow) IOState(strExt);
 		if (!n)
 			throw "Out of memory";
+
+		n->m_auto_pop = auto_pop;
 
 		r = true;
 	}

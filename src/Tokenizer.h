@@ -26,7 +26,9 @@
 #include <OOBase/String.h>
 #include <OOBase/HashTable.h>
 
-#include "IOState.h"
+#include "Token.h"
+
+class IOState;
 
 // Callbacks
 
@@ -44,23 +46,23 @@ public:
 	{
 		Error = 0,
 		End = 1,
-		DocumentStandalone = 2,
-		DocumentVersion = 3,
-		DocumentEncoding = 4,
-		DocTypeStart = 5,
-		DocTypeEnd = 6,
-		ElementStart = 7,
-		ElementEnd = 8,
-		AttributeName = 9,
-		AttributeValue = 10,
-		Text = 11,
-		PiTarget = 12,
-		PiData = 13,
-		Comment = 14,
-		CData = 15
+		DocTypeStart = 2,
+		DocTypeEnd = 3,
+		ElementStart = 4,
+		ElementEnd = 5,
+		AttributeName = 6,
+		AttributeValue = 7,
+		Text = 8,
+		PiTarget = 9,
+		PiData = 10,
+		Comment = 11,
+		CData = 12
 	};
 
 	TokenType next_token(OOBase::String& strToken, int verbose = 0);
+	size_t get_column() const;
+	size_t get_line() const;
+	OOBase::String get_location() const;
 
 private:
 	// Ragel members
@@ -77,6 +79,8 @@ private:
 	Token m_system;
 	Token m_public;
 	bool  m_internal_doctype;
+	bool  m_standalone;
+	OOBase::String m_strEncoding;
 
 	IOState* m_io;
 
@@ -104,10 +108,7 @@ private:
 		int unused;
 	};
 
-	bool operator == (const EndOfFile&) const
-	{
-		return (m_io == NULL || m_io->is_eof());
-	}
+	bool operator == (const EndOfFile&) const;
 
 	struct ParseState
 	{
@@ -122,23 +123,13 @@ private:
 		{}
 	};
 
-	bool operator == (const ParseState& pe) const
-	{
-		return (pe.m_halt || m_io == NULL || m_io->is_eof());
-	}
+	bool operator == (const ParseState& pe) const;
 		
 	unsigned char operator * () const
 	{ 
 		return m_char; 
 	}
 	
-	void encoding();
-	void report_encoding(ParseState& pe);
-	void update_encoding();
-
-	void set_decoder(Decoder::eType type);
-	Decoder::eType get_decoder() const;
-
 	void pre_push();
 
 	void external_doctype();
@@ -154,9 +145,9 @@ private:
 	void general_entity();
 	void param_entity();
 	bool subst_attr_entity();
-	unsigned int subst_content_entity();
-	unsigned int subst_pentity();
-	bool include_pe(bool auto_pop);
+	bool subst_content_entity();
+	bool subst_pentity();
+	void include_pe(bool auto_pop);
 	void io_pop();
 	void subst_char(int base);
 };

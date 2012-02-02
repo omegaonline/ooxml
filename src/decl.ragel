@@ -1,0 +1,93 @@
+///////////////////////////////////////////////////////////////////////////////////
+//
+// Copyright (C) 2012 Rick Taylor
+//
+// This file is part of OOXML, the Omega Online XML library.
+//
+// OOXML is free software: you can redistribute it and/or modify
+// it under the terms of the GNU Lesser General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+//
+// OOXML is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU Lesser General Public License for more details.
+//
+// You should have received a copy of the GNU Lesser General Public License
+// along with OOXML.  If not, see <http://www.gnu.org/licenses/>.
+//
+///////////////////////////////////////////////////////////////////////////////////
+
+%%{
+	machine decl;
+	access this->m_;
+	alphtype unsigned char;
+	
+	S             =    (0x20 | 0x9 | 0xD | 0xA)+;
+	Eq            =    S? '=' S?;
+
+	VersionNum    =    ('1.' [0-9]+) ${token.push(m_char);} %{OOBase::String s;token.pop(s);printf("Version %s\n",s.c_str());};
+	VersionInfo   =    S 'version' Eq ("'" VersionNum "'" | '"' VersionNum '"');
+	EncName       =    ([a-zA-Z] ([a-zA-Z0-9._] | '-')*) ${token.push(m_char);};
+	EncodingDecl  =    S 'encoding' Eq ('"' EncName '"' | "'" EncName "'" ) @{set_encoding(token,strEncoding);};
+	SDDecl        =    S 'standalone' Eq (("'" ('yes' @{standalone=true;} | 'no') "'") | ('"' ('yes'@{standalone=true;} | 'no') '"'));
+	
+	BOM           =    (0xFE 0xFF) @{set_decoder(Decoder::UTF16BE);printf("UTF16BE BOM\n");}
+	                   | (0xFF 0xFE) @{set_decoder(Decoder::UTF16LE);printf("UTF16LE BOM\n");}
+	                   | (0xEF 0xBB 0xBF) @{printf("UTF8 BOM\n");};
+	
+	NoBOM         =    0x00 0x00 0x00 '<' @{set_decoder(Decoder::UTF32BE);} '?xml'
+	                   | '<' 0x00 0x00 0x00 @{set_decoder(Decoder::UTF32LE);} '?xml'
+	                   | 0x00 '<' 0x00 '?' @{set_decoder(Decoder::UTF16BE);} 'xml'
+	                   | '<' 0x00 '?' 0x00 @{set_decoder(Decoder::UTF16LE);} 'xml'
+	                   | 0x4C 0x6F 0x0A7 0x94 @{set_decoder(Decoder::EBCDIC);} 'l';
+	                   
+	XMLPart       =    (('<' 0x00 '?' 0x00) when {m_decoder_type==Decoder::UTF16LE}) @{backup.clear();backup.push("<?");set_decoder(Decoder::UTF32LE);} 'xml'
+	                   | '<?xml'
+	                   | NoBOM;
+	                   	                   	
+   	TextDecl      =    VersionInfo? EncodingDecl;
+	XMLDecl       =    VersionInfo EncodingDecl? SDDecl?;
+	
+	Decl          =    BOM? (XMLPart ((TextDecl when {entity}) | (XMLDecl when {!entity})) S? '?>') ${backup.push(m_char);};
+	
+	main         :=    Decl? @{fbreak;};
+	
+}%%
+
+#include "../src/IOState.h"
+
+// Ragel does silly things with signed and unsigned short
+#define short unsigned short
+
+%% write data;
+
+void IOState::init(bool entity, OOBase::String& strEncoding, bool& standalone)
+{
+	IOState&        p   = *this;
+	const EndOfFile eof = EndOfFile();
+	
+	Token token;
+	Token backup;
+
+	%% write init;
+	
+	m_char = next_char();	
+	//printf("c = %c (%x)\n",m_char,m_char);
+	
+	%% write exec noend;
+	
+	m_input.push(m_char);
+	
+	if (m_cs < %%{ write first_final; }%%)
+	{
+		while (!backup.empty())
+		{
+			unsigned char c = backup.pop();
+			m_input.push(c);
+		} 
+	}
+	
+	switch_encoding(strEncoding);
+}

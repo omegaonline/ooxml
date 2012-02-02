@@ -76,6 +76,7 @@ ooxml_SOURCES = \
 	src/Token.h \
 	src/Token.cpp \
 	src/xml.ragel \
+	src/decl.ragel \
 	src/ooxml.cpp
 		
 #ooxml_la_CXXFLAGS = $(INCICONV)

@@ -31,18 +31,17 @@
 class IOState
 {
 public:
-	IOState(const OOBase::String& fname, bool pre_space);
+	IOState(const OOBase::String& fname);
 	IOState(const OOBase::String& entity_name, const OOBase::String& repl_text);
 	~IOState();
+
+	void init(OOBase::String& strEncoding, bool& standalone);
+	void init();
 
 	unsigned char next_char();
 	bool is_eof() const;
 	void rappend(const OOBase::String& str);
 	void push(unsigned char c);
-	void set_decoder(Decoder::eType type);
-	Decoder::eType get_decoder() const;
-	void set_encoder(const OOBase::String& str);
-	OOBase::String get_encoder() const;
 
 	OOBase::String m_fname;
 	size_t         m_col;
@@ -54,14 +53,48 @@ private:
 	IOState(const IOState&);
 	IOState& operator = (const IOState&);
 
-	unsigned char get_char();
+	// These are the private members used by Ragel
+	int           m_cs;
+	unsigned char m_char;
+
+	IOState& operator += (int)
+	{
+		m_char = next_char();
+		return *this;
+	}
+
+	IOState& operator ++ (int)
+	{
+		m_char = next_char();
+		return *this;
+	}
+
+	struct EndOfFile
+	{
+		int unused;
+	};
+
+	bool operator == (const EndOfFile&) const
+	{
+		return (m_io == NULL || m_io->is_eof());
+	}
+
+	unsigned char operator * () const
+	{
+		return m_char;
+	}
+
+	void set_decoder(Decoder::eType type);
+	void set_encoding(Token& token, OOBase::String& str);
+	void init(bool entity, OOBase::String& strEncoding, bool& standalone);
+	unsigned char get_char(bool& from_input);
+	void switch_encoding(OOBase::String& strEncoding);
 
 	Decoder*       m_decoder;
 	Decoder::eType m_decoder_type;
 	IO*            m_io;
 	bool           m_eof;
 	Token          m_input;
-	OOBase::String m_encoding;
 };
 
 #endif // IOSTATE_H_INCLUDED_

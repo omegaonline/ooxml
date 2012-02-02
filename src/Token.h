@@ -34,6 +34,7 @@ public:
 	bool empty() const;
 
 	void push(unsigned char c);
+	void push(const char* sz);
 
 	unsigned char pop();
 	const char* pop(size_t& len);

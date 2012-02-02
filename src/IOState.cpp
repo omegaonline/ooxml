@@ -21,7 +21,7 @@
 
 #include "IOState.h"
 
-IOState::IOState(const OOBase::String& fname, bool pre_space) :
+IOState::IOState(const OOBase::String& fname) :
 		m_fname(fname),
 		m_col(0),
 		m_line(1),
@@ -38,12 +38,6 @@ IOState::IOState(const OOBase::String& fname, bool pre_space) :
 	int err = m_io->open(fname.c_str());
 	if (err != 0)
 		m_eof = true;
-
-	if (pre_space)
-	{
-		void* TODO; // Need to handle pre_space
-
-	}
 }
 
 IOState::IOState(const OOBase::String& entity_name, const OOBase::String& repl_text) :
@@ -67,6 +61,18 @@ IOState::~IOState()
 	delete m_next;
 }
 
+void IOState::init(OOBase::String& strEncoding, bool& standalone)
+{
+	init(false,strEncoding,standalone);
+}
+
+void IOState::init()
+{
+	OOBase::String strEncoding;
+	bool standalone;
+	init(true,strEncoding,standalone);
+}
+
 void IOState::set_decoder(Decoder::eType type)
 {
 	if (m_decoder_type != type)
@@ -77,42 +83,56 @@ void IOState::set_decoder(Decoder::eType type)
 	}
 }
 
-Decoder::eType IOState::get_decoder() const
+void IOState::set_encoding(Token& token, OOBase::String& str)
 {
-	return m_decoder_type;
+	set_decoder(Decoder::None);
+	token.pop(str);
 }
 
-void IOState::set_encoder(const OOBase::String& str)
+void IOState::switch_encoding(OOBase::String& strEncoding)
 {
-	if (m_encoding != str && !m_encoding.empty() && !str.empty())
-		throw "Invalid encoding";
-
-	if (m_encoding != str)
+	if (strEncoding.empty())
 	{
-		delete m_decoder;
-		m_decoder = NULL;
+		const char* sz = "UTF-8";
+		switch (m_decoder_type)
+		{
+		case Decoder::UTF16BE:
+			sz = "UTF-16BE";
+			break;
 
-		m_encoding = str;
+		case Decoder::UTF16LE:
+			sz = "UTF-16LE";
+			break;
 
-		if (str != "UTF-8" && str != "utf-8")
-			printf("WILL FAIL - NO DECODER FOR %s\n",str.c_str());
+		case Decoder::UTF32BE:
+		case Decoder::UTF32LE:
+		case Decoder::EBCDIC:
+			throw "Missing required encoding attribute";
+
+		default:
+			break;
+		}
+
+		int err = strEncoding.assign(sz);
+		if (err != 0)
+			throw "Out of memory";
 	}
+
+	if (strEncoding != "UTF-8" && strEncoding != "utf-8")
+		printf("NO ENCODER FOR %s  -  WILL FAIL!\n",strEncoding.c_str());
 }
 
-OOBase::String IOState::get_encoder() const
-{
-	return m_encoding;
-}
-
-unsigned char IOState::get_char()
+unsigned char IOState::get_char(bool& from_input)
 {
 	unsigned char c = '\0';
 	if (!m_input.empty())
 	{
+		from_input = true;
 		c = m_input.pop();
 	}
 	else if (m_io)
 	{
+		from_input = false;
 		bool again = false;
 		do
 		{
@@ -138,12 +158,13 @@ void IOState::push(unsigned char c)
 
 unsigned char IOState::next_char()
 {
-	unsigned char c = get_char();
-	if (c == '\r')
+	bool from_input = false;
+	unsigned char c = get_char(from_input);
+	if (c == '\r' && from_input)
 	{
 		c = '\n';
 
-		unsigned char n = get_char();
+		unsigned char n = get_char(from_input);
 		if (n != '\n')
 			m_input.push(n);
 	}

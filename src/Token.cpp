@@ -47,6 +47,12 @@ unsigned char Token::pop()
 	return r;
 }
 
+void Token::push(const char* sz)
+{
+	while (*sz != '\0')
+		push(static_cast<unsigned char>(*sz++));
+}
+
 void Token::push(unsigned char c)
 {
 	if (!m_buffer)

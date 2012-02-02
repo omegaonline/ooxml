@@ -132,7 +132,12 @@ private:
 		return m_char; 
 	}
 	
-	void encoding(ParseState& pe);
+	void encoding();
+	void report_encoding(ParseState& pe);
+	void update_encoding();
+
+	void set_decoder(Decoder::eType type);
+	Decoder::eType get_decoder() const;
 
 	void pre_push();
 

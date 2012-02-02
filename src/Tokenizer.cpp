@@ -111,30 +111,89 @@ void Tokenizer::next_char()
 			break;
 	}
 
-	//printf("c = %c (%x)\n",m_char,m_char);
+	printf("c = %c (%x)\n",m_char,m_char);
 }
 
-void Tokenizer::encoding(ParseState& pe)
+void Tokenizer::set_decoder(Decoder::eType type)
 {
-	size_t len = 0;
-	const char* val = m_token.pop(len);
+	if (m_io)
+		m_io->set_decoder(type);
+}
 
-	if (len && m_io)
+Decoder::eType Tokenizer::get_decoder() const
+{
+	if (m_io)
+		return m_io->get_decoder();
+	else
+		return Decoder::None;
+}
+
+void Tokenizer::encoding()
+{
+	OOBase::String strEnc;
+	m_token.pop(strEnc);
+
+	if (m_io)
 	{
 		// Drop any decoder and use the real decoder
-		m_io->clear_decoder();
+		m_io->set_encoder(strEnc);
+	}
+}
 
-		if (!m_io->m_next)
+void Tokenizer::report_encoding(ParseState& pe)
+{
+	OOBase::String strEnc;
+
+	update_encoding();
+
+	if (m_io)
+		strEnc = m_io->get_encoder();
+
+	if (strEnc.empty())
+	{
+		int err = strEnc.assign("UTF-8",5);
+		if (err != 0)
+			throw "Out of memory";
+	}
+
+	pe.m_strToken = strEnc;
+	pe.m_type = Tokenizer::DocumentEncoding;
+	pe.m_halt = true;
+}
+
+void Tokenizer::update_encoding()
+{
+	if (m_io && m_io->get_encoder().empty())
+	{
+		const char* szEnc = NULL;
+		switch (m_io->get_decoder())
 		{
-			int err = pe.m_strToken.assign(val,len);
+		case Decoder::UTF16BE:
+			szEnc = "UTF-16BE";
+			break;
+
+		case Decoder::UTF16LE:
+			szEnc = "UTF-16LE";
+			break;
+
+		case Decoder::None:
+			break;
+
+		case Decoder::UTF32BE:
+		case Decoder::UTF32LE:
+		case Decoder::EBCDIC:
+		default:
+			throw "Missing required encoding declaration";
+		}
+
+		if (szEnc)
+		{
+			OOBase::String strEnc;
+			int err = strEnc.assign(szEnc);
 			if (err != 0)
 				throw "Out of memory";
 
-			pe.m_type = Tokenizer::DocumentEncoding;
-			pe.m_halt = true;
-
-			if (pe.m_strToken != "UTF-8" && pe.m_strToken != "utf-8")
-				printf("WILL FAIL - NO DECODER FOR %s\n",pe.m_strToken.c_str());
+			m_io->set_encoder(strEnc);
 		}
 	}
 }

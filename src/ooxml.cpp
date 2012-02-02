@@ -27,7 +27,7 @@
 static size_t passed = 0;
 static size_t failed = 0;
 
-static const int verbose = 0;
+static const int verbose = 2;
 
 static bool do_test(const OOBase::String& strURI)
 {

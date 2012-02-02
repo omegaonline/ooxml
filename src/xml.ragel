@@ -56,11 +56,25 @@
 	VersionNum    =    ('1.' [0-9]+) $append;
 	VersionInfo   =    S 'version' Eq ("'" VersionNum "'" | '"' VersionNum '"');
 	EncName       =    ([a-zA-Z] ([a-zA-Z0-9._] | '-')*) $append;
-	EncodingDecl  =    S 'encoding' Eq ('"' EncName '"' | "'" EncName "'" ) @{encoding(pe);};
+	EncodingDecl  =    S 'encoding' Eq ('"' EncName '"' | "'" EncName "'" ) @{encoding();};
 	SDDecl        =    S 'standalone' Eq (("'" ('yes' @{TOKEN(DocumentStandalone)} | 'no') "'") | ('"' ('yes' @{TOKEN(DocumentStandalone)} | 'no') '"'));
-		                   	
+	
+	BOM           =    0xFE 0xFF @{set_decoder(Decoder::UTF16BE);}
+	                   | 0xFF 0xFE @{set_decoder(Decoder::UTF16LE);}
+	                   | 0xEF 0xBB 0xBF;
+	
+	NoBOM         =    0x00 0x00 0x00 '<' @{set_decoder(Decoder::UTF32BE);} '?xml'
+	                   | '<' 0x00 0x00 0x00 @{set_decoder(Decoder::UTF32LE);} '?xml'
+	                   | 0x00 '<' 0x00 '?' @{set_decoder(Decoder::UTF16BE);} 'xml'
+	                   | '<' 0x00 '?' 0x00 @{set_decoder(Decoder::UTF16LE);} 'xml'
+	                   | 0x4C 0x6F 0x0A7 0x94 @{set_decoder(Decoder::EBCDIC);} 'l';
+	                   
+	XMLPart       =    (('<' 0x00 '?' 0x00) when {get_decoder()==Decoder::UTF16LE}) @{set_decoder(Decoder::UTF32LE);} 'xml'
+	                   | '<?xml'
+	                   | NoBOM;
+	                   	                   	
    	XMLDecl_i    :=    VersionInfo @{TOKEN(DocumentVersion)} EncodingDecl? SDDecl? S? '?>' @return;
-	XMLDecl       =    '<?xml' @{m_token.clear();fcall XMLDecl_i;};
+	XMLDecl       =    XMLPart @{m_token.clear();fcall XMLDecl_i;};
 		
 	Comment       =    '<!--' @{fcall Comment_i;};
 	Comment_i    :=    ((Char - '-') | ('-' (Char - '-')))* $append '-->' @{set_token(pe,Tokenizer::Comment,1);fret;};
@@ -78,7 +92,7 @@
 	                   | (0xE4..0xEC) utf8_cont{2} | 0xED (0x80..0x9F) utf8_cont   # [#x4000-#xD7FF]
 	                   | 0xEF ((0xA4..0xB6) utf8_cont | 0xB7 (0x80..0x87))         # [#xF900-#xFDCF]
 	                   | 0xEF (0xB7 (0xB0..0xBF) | (0xB8..0xBF) utf8_cont)         # [#xFDF0-#xFFFD]
-	                   | utf8_four_byte;                                            # [#x10000-#xEFFFF]
+	                   | utf8_four_byte;                                           # [#x10000-#xEFFFF]
 	 
 	NameChar      =    NameStartChar | "-" | "." | [0-9]
 	                   | 0xC2 0xB7                          #  #xB7
@@ -185,23 +199,23 @@
 	extSubsetDecl =    (markupdecl | conditionalSect | DeclSep)*;
 	includeSect_i :=   extSubsetDecl ']]>' @return;
 			
-	TextDecl      =    '<?xml' @{m_token.clear();} VersionInfo? EncodingDecl S? '?>';
+	TextDecl      =    XMLPart @{m_token.clear();} VersionInfo? EncodingDecl S? '?>';
 	
 	action ext_return { io_pop(); fret;}
-	extSubset    :=    (TextDecl? extSubsetDecl) %{TOKEN(DocTypeEnd)} %ext_return;
-	extParsedEnt :=    (TextDecl? content) %ext_return;
+	extSubset    :=    (BOM? TextDecl? extSubsetDecl) %{TOKEN(DocTypeEnd)} %ext_return;
+	extParsedEnt :=    (BOM? TextDecl? content) %ext_return;
 	intParsedEnt :=    content %ext_return;
 	AttValueEnt  :=    ((Char - [<&]) $append | AttReference)* %ext_return;
 	eiEntityValueEnt = ((Char - [%&]) $append | PEVReference | EVReference)*;
-	extEntityValueEnt := (TextDecl? eiEntityValueEnt) %ext_return;
+	extEntityValueEnt := (BOM? TextDecl? eiEntityValueEnt) %ext_return;
 	intEntityValueEnt := eiEntityValueEnt %ext_return;
-	extDeclSepEnt:=    (TextDecl? extSubsetDecl) %ext_return;
+	extDeclSepEnt:=    (BOM? TextDecl? extSubsetDecl) %ext_return;
 	intDeclSepEnt:=    extSubsetDecl %ext_return;
 	
 	intSubset_i  :=    intSubset ']' @return;
 	
 	doctypedecl   =    '<!DOCTYPE' S QName $append %{TOKEN(DocTypeStart)} (S ExternalID @{external_doctype();})? S? ('[' @{fcall intSubset_i;} S?)? '>' @{ if (do_doctype()) fcall extSubset; else {TOKEN(DocTypeEnd)}};
-	prolog        =    XMLDecl? Misc* (doctypedecl Misc*)?;
+	prolog        =    (BOM? XMLDecl?) @{report_encoding(pe);} Misc* (doctypedecl Misc*)?;
 	document      =    prolog element Misc*;
  
 	main := document;

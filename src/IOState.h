@@ -39,7 +39,10 @@ public:
 	bool is_eof() const;
 	void rappend(const OOBase::String& str);
 	void push(unsigned char c);
-	void clear_decoder();
+	void set_decoder(Decoder::eType type);
+	Decoder::eType get_decoder() const;
+	void set_encoder(const OOBase::String& str);
+	OOBase::String get_encoder() const;
 
 	OOBase::String m_fname;
 	size_t         m_col;
@@ -54,10 +57,11 @@ private:
 	unsigned char get_char();
 
 	Decoder*       m_decoder;
+	Decoder::eType m_decoder_type;
 	IO*            m_io;
 	bool           m_eof;
 	Token          m_input;
-	Token          m_bom_input;
+	OOBase::String m_encoding;
 };
 
 #endif // IOSTATE_H_INCLUDED_

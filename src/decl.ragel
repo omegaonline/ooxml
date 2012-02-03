@@ -27,23 +27,23 @@
 	S             =    (0x20 | 0x9 | 0xD | 0xA)+;
 	Eq            =    S? '=' S?;
 
-	VersionNum    =    ('1.' [0-9]+) ${token.push(m_char);} %{OOBase::String s;token.pop(s);printf("Version %s\n",s.c_str());};
+	VersionNum    =    ('1.' [0-9]+);
 	VersionInfo   =    S 'version' Eq ("'" VersionNum "'" | '"' VersionNum '"');
 	EncName       =    ([a-zA-Z] ([a-zA-Z0-9._] | '-')*) ${token.push(m_char);};
 	EncodingDecl  =    S 'encoding' Eq ('"' EncName '"' | "'" EncName "'" ) @{set_encoding(token,strEncoding);};
 	SDDecl        =    S 'standalone' Eq (("'" ('yes' @{standalone=true;} | 'no') "'") | ('"' ('yes'@{standalone=true;} | 'no') '"'));
 	
-	BOM           =    (0xFE 0xFF) @{set_decoder(Decoder::UTF16BE);printf("UTF16BE BOM\n");}
-	                   | (0xFF 0xFE) @{set_decoder(Decoder::UTF16LE);printf("UTF16LE BOM\n");}
-	                   | (0xEF 0xBB 0xBF) @{printf("UTF8 BOM\n");};
+	BOM           =    (0xFE 0xFF) @{set_decoder(Decoder::UTF16BE);}
+	                   | (0xFF 0xFE) @{set_decoder(Decoder::UTF16LE);}
+	                   | (0xEF 0xBB 0xBF);
 	
-	NoBOM         =    0x00 0x00 0x00 '<' @{set_decoder(Decoder::UTF32BE);} '?xml'
-	                   | '<' 0x00 0x00 0x00 @{set_decoder(Decoder::UTF32LE);} '?xml'
-	                   | 0x00 '<' 0x00 '?' @{set_decoder(Decoder::UTF16BE);} 'xml'
-	                   | '<' 0x00 '?' 0x00 @{set_decoder(Decoder::UTF16LE);} 'xml'
+	NoBOM         =    0x00 0x00 0x00 '<' @{m_col=1;set_decoder(Decoder::UTF32BE);} '?xml'
+	                   | '<' 0x00 0x00 0x00 @{m_col=1;set_decoder(Decoder::UTF32LE);} '?xml'
+	                   | 0x00 '<' 0x00 '?' @{m_col=2;set_decoder(Decoder::UTF16BE);} 'xml'
+	                   | '<' 0x00 '?' 0x00 @{m_col=2;set_decoder(Decoder::UTF16LE);} 'xml'
 	                   | 0x4C 0x6F 0x0A7 0x94 @{set_decoder(Decoder::EBCDIC);} 'l';
 	                   
-	XMLPart       =    (('<' 0x00 '?' 0x00) when {m_decoder_type==Decoder::UTF16LE}) @{backup.clear();backup.push("<?");set_decoder(Decoder::UTF32LE);} 'xml'
+	XMLPart       =    (('<' 0x00 '?' 0x00) when {m_decoder_type==Decoder::UTF16LE}) @{m_col=2;backup.clear();backup.push("<?");set_decoder(Decoder::UTF32LE);} 'xml'
 	                   | '<?xml'
 	                   | NoBOM;
 	                   	                   	
@@ -74,14 +74,17 @@ void IOState::init(bool entity, OOBase::String& strEncoding, bool& standalone)
 	%% write init;
 	
 	m_char = next_char();	
-	//printf("c = %c (%x)\n",m_char,m_char);
 	
 	%% write exec noend;
 	
-	m_input.push(m_char);
-	
+	if (m_char != '\0')
+		m_input.push(m_char);
+		
 	if (m_cs < %%{ write first_final; }%%)
 	{
+		m_col = 0;
+		m_line = 1;
+				
 		while (!backup.empty())
 		{
 			unsigned char c = backup.pop();

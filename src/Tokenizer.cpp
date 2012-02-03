@@ -63,12 +63,15 @@ Tokenizer::Tokenizer() :
 Tokenizer::~Tokenizer()
 {
 	OOBase::HeapAllocator::free(m_stack);
+
+	while (m_io)
+		io_pop();
 }
 
 void Tokenizer::load(const OOBase::String& fname)
 {
-	delete m_io;
-	m_io = NULL;
+	while (m_io)
+		io_pop();
 
 	do_init();
 	

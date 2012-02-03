@@ -34,11 +34,14 @@ IO::~IO()
 
 int IO::open(const char* fname)
 {
+	int err = 0;
 	m_f = fopen(fname,"rb");
 	if (m_f)
 		m_eof = (feof(m_f) != 0);
+	else
+		err = errno;
 
-	return errno;
+	return err;
 }
 
 bool IO::is_eof() const

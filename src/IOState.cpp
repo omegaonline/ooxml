@@ -37,7 +37,7 @@ IOState::IOState(const OOBase::String& fname) :
 
 	int err = m_io->open(fname.c_str());
 	if (err != 0)
-		m_eof = true;
+		throw "IO Error";
 }
 
 IOState::IOState(const OOBase::String& entity_name, const OOBase::String& repl_text) :
@@ -118,7 +118,7 @@ void IOState::switch_encoding(OOBase::String& strEncoding)
 			throw "Out of memory";
 	}
 
-	if (strEncoding != "UTF-8" && strEncoding != "utf-8")
+	if (strEncoding != "UTF-8" && strEncoding != "utf-8" && strEncoding != "UTF8" && strEncoding != "utf8")
 		printf("NO ENCODER FOR %s  -  WILL FAIL!\n",strEncoding.c_str());
 }
 

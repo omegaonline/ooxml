@@ -110,7 +110,7 @@ static bool do_valid_test(const OOBase::String& strURI)
 
 static bool do_invalid_test(const OOBase::String& strURI)
 {
-	if (do_test(strURI,false))
+	if (do_test(strURI,true))
 		return pass();
 	else
 		return fail();
@@ -179,7 +179,7 @@ static void do_test(Tokenizer& tok, const OOBase::String& strBase)
 				return;
 
 			if (!ret && !strText.empty())
-				printf("%s\n",strText.c_str());
+				printf("%s\n\n",strText.c_str());
 
 			return;
 		}

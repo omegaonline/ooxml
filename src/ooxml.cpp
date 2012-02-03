@@ -136,6 +136,8 @@ static void do_test(Tokenizer& tok, const OOBase::String& strBase)
 {
 	OOBase::String strType,strText;
 	OOBase::String strURI = strBase;
+	OOBase::String strEdition;
+	OOBase::String strNamespace;
 	Tokenizer::TokenType tok_type;
 	do
 	{
@@ -159,6 +161,16 @@ static void do_test(Tokenizer& tok, const OOBase::String& strBase)
 				if (tok.next_token(strToken,verbose) == Tokenizer::AttributeValue)
 					strURI.append(strToken.c_str());
 			}
+			else if (strToken == "EDITION")
+			{
+				if (tok.next_token(strToken,verbose) == Tokenizer::AttributeValue)
+					strEdition = strToken;
+			}
+			else if (strToken == "NAMESPACE")
+			{
+				if (tok.next_token(strToken,verbose) == Tokenizer::AttributeValue)
+					strNamespace = strToken;
+			}
 		}
 		else if (tok_type == Tokenizer::Text)
 		{
@@ -166,20 +178,27 @@ static void do_test(Tokenizer& tok, const OOBase::String& strBase)
 		}
 		else if (tok_type == Tokenizer::ElementEnd && strToken == "TEST")
 		{
-			bool ret = false;
-			if (strType == "valid")
-				ret = do_valid_test(strURI);
-			else if (strType == "invalid")
-				ret = do_invalid_test(strURI);
-			else if (strType == "not-wf")
-				ret = do_not_wf_test(strURI);
-			else if (strType == "error")
-				ret = do_error_test(strURI);
+			if (strNamespace == "no")
+				printf("Skipping, test only applies to non-namespace parsers\n");
+			else if (!strEdition.empty() && strEdition.find('5') == OOBase::String::npos)
+				printf("Skipping, test only applies to editions %s\n",strEdition.c_str());
 			else
-				return;
+			{
+				bool ret = false;
+				if (strType == "valid")
+					ret = do_valid_test(strURI);
+				else if (strType == "invalid")
+					ret = do_invalid_test(strURI);
+				else if (strType == "not-wf")
+					ret = do_not_wf_test(strURI);
+				else if (strType == "error")
+					ret = do_error_test(strURI);
+				else
+					return;
 
-			if (!ret && !strText.empty())
-				printf("%s\n\n",strText.c_str());
+				if (!ret && !strText.empty())
+					printf("%s\n\n",strText.c_str());
+			}
 
 			return;
 		}

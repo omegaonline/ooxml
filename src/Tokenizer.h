@@ -63,6 +63,7 @@ public:
 	size_t get_column() const;
 	size_t get_line() const;
 	OOBase::String get_location() const;
+	unsigned int get_version() const;
 
 private:
 	// Ragel members

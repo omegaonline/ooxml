@@ -21,7 +21,7 @@
 
 #include "IOState.h"
 
-IOState::IOState(const OOBase::String& fname) :
+IOState::IOState(const OOBase::String& fname, unsigned int version) :
 		m_fname(fname),
 		m_col(0),
 		m_line(1),
@@ -30,7 +30,8 @@ IOState::IOState(const OOBase::String& fname) :
 		m_decoder(NULL),
 		m_decoder_type(Decoder::None),
 		m_io(new (std::nothrow) IO()),
-		m_eof(false)
+		m_eof(false),
+		m_version(version)
 {
 	if (!m_io)
 		throw "Out of memory";
@@ -40,7 +41,7 @@ IOState::IOState(const OOBase::String& fname) :
 		throw "IO Error";
 }
 
-IOState::IOState(const OOBase::String& entity_name, const OOBase::String& repl_text) :
+IOState::IOState(const OOBase::String& entity_name, unsigned int version, const OOBase::String& repl_text) :
 		m_fname(entity_name),
 		m_col(0),
 		m_line(1),
@@ -49,7 +50,8 @@ IOState::IOState(const OOBase::String& entity_name, const OOBase::String& repl_t
 		m_decoder(NULL),
 		m_decoder_type(Decoder::None),
 		m_io(NULL),
-		m_eof(repl_text.empty())
+		m_eof(repl_text.empty()),
+		m_version(version)
 {
 	m_input.rappend(repl_text);
 }
@@ -151,6 +153,11 @@ unsigned char IOState::get_char(bool& from_input)
 	return c;
 }
 
+unsigned int IOState::get_version()
+{
+	return m_version;
+}
+
 void IOState::push(unsigned char c)
 {
 	m_input.push(c);
@@ -160,13 +167,55 @@ unsigned char IOState::next_char()
 {
 	bool from_input = false;
 	unsigned char c = get_char(from_input);
-	if (c == '\r' && from_input)
-	{
-		c = '\n';
 
-		unsigned char n = get_char(from_input);
-		if (n != '\n')
-			m_input.push(n);
+	if (!from_input)
+	{
+		if (c == '\r')
+		{
+			c = '\n';
+
+			unsigned char n = get_char(from_input);
+			if (m_version == 1 && n == 0xC2)
+			{
+				unsigned char n2 = get_char(from_input);
+				if (n2 != 0x85)
+				{
+					m_input.push(n2);
+					m_input.push(n);
+				}
+			}
+			else if (n != '\n')
+				m_input.push(n);
+		}
+		else if (m_version == 1)
+		{
+			if (c == 0xC2)
+			{
+				unsigned char n = get_char(from_input);
+				if (n != 0x85)
+					m_input.push(n);
+				else
+					c = '\n';
+			}
+			else if (c == 0xE2)
+			{
+				// e2 80 a8 = U+2028
+				unsigned char n = get_char(from_input);
+				if (n != 0x80)
+					m_input.push(n);
+				else
+				{
+					unsigned char n2 = get_char(from_input);
+					if (n2 != 0xA8)
+					{
+						m_input.push(n2);
+						m_input.push(n);
+					}
+					else
+						c = '\n';
+				}
+			}
+		}
 	}
 
 	if (c == '\n')
@@ -189,4 +238,17 @@ void IOState::rappend(const OOBase::String& str)
 bool IOState::is_eof() const
 {
 	return m_eof;
+}
+
+void IOState::set_version(Token& token)
+{
+	OOBase::String str;
+	token.pop(str);
+
+	unsigned long version = strtoul(str.c_str(),NULL,10);
+
+	if (m_version == (unsigned int)-1)
+		m_version = version;
+	else if (version > m_version)
+		throw "Included external entity of higher version";
 }

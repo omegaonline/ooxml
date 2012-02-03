@@ -108,6 +108,14 @@ size_t Tokenizer::get_line() const
 		return 0;
 }
 
+unsigned int Tokenizer::get_version() const
+{
+	if (m_io)
+		return m_io->get_version();
+	else
+		return 0;
+}
+
 OOBase::String Tokenizer::get_location() const
 {
 	if (m_io)
@@ -256,7 +264,7 @@ bool Tokenizer::subst_content_entity()
 
 			check_entity_recurse(strFull);
 
-			n = new (std::nothrow) IOState(strFull,*pInt);
+			n = new (std::nothrow) IOState(strFull,get_version(),*pInt);
 			if (!n)
 				throw "Out of memory";
 		}
@@ -278,7 +286,7 @@ bool Tokenizer::subst_content_entity()
 			check_entity_recurse(strExt);
 
 			// Start pulling from external source
-			n = new (std::nothrow) IOState(strExt);
+			n = new (std::nothrow) IOState(strExt,get_version());
 			if (!n)
 				throw "Out of memory";
 
@@ -315,7 +323,7 @@ bool Tokenizer::subst_attr_entity()
 
 		check_entity_recurse(strFull);
 
-		IOState* n = new (std::nothrow) IOState(strFull,*pInt);
+		IOState* n = new (std::nothrow) IOState(strFull,get_version(),*pInt);
 		if (!n)
 			throw "Out of memory";
 
@@ -350,7 +358,7 @@ bool Tokenizer::subst_pentity()
 
 			check_entity_recurse(strFull);
 
-			n = new (std::nothrow) IOState(strFull,*pInt);
+			n = new (std::nothrow) IOState(strFull,get_version(),*pInt);
 			if (!n)
 				throw "Out of memory";
 		}
@@ -366,7 +374,7 @@ bool Tokenizer::subst_pentity()
 		check_entity_recurse(strExt);
 
 		// Start pulling from external source
-		n = new (std::nothrow) IOState(strExt);
+		n = new (std::nothrow) IOState(strExt,get_version());
 		if (!n)
 			throw "Out of memory";
 
@@ -401,7 +409,7 @@ void Tokenizer::include_pe(bool auto_pop)
 
 		check_entity_recurse(strFull);
 
-		n = new (std::nothrow) IOState(strFull,*pInt);
+		n = new (std::nothrow) IOState(strFull,get_version(),*pInt);
 		if (!n)
 			throw "Out of memory";
 
@@ -418,7 +426,7 @@ void Tokenizer::include_pe(bool auto_pop)
 		check_entity_recurse(strExt);
 
 		// Start pulling from external source
-		n = new (std::nothrow) IOState(strExt);
+		n = new (std::nothrow) IOState(strExt,get_version());
 		if (!n)
 			throw "Out of memory";
 
@@ -446,11 +454,21 @@ void Tokenizer::subst_char(int base)
 
 	unsigned long v = strtoul(strEntity.c_str(),NULL,base);
 
-	// Check for Char (for xml 1.0)
-	if ((v <= 0x1F && v != 0x9 && v != 0xA && v != 0xD) ||
-		(v >= 0xD800 && v <= 0xDFFF) ||
-		(v >= 0xFFFE && v <= 0xFFFF) ||
-		v > 0x10FFFF)
+	// Check for Char
+	if (get_version() == 1)
+	{
+		if (v == 0x00 ||
+			(v >= 0xD800 && v <= 0xDFFF) ||
+			(v >= 0xFFFE && v <= 0xFFFF) ||
+			v > 0x10FFFF)
+		{
+			throw "Invalid Char";
+		}
+	}
+	else if ((v <= 0x1F && v != 0x9 && v != 0xA && v != 0xD) ||
+			(v >= 0xD800 && v <= 0xDFFF) ||
+			(v >= 0xFFFE && v <= 0xFFFF) ||
+			v > 0x10FFFF)
 	{
 		throw "Invalid Char";
 	}
@@ -506,7 +524,7 @@ void Tokenizer::external_doctype()
 	m_public.pop(strPublicId);
 
 	// We cheat and use m_next here
-	m_io->m_next = new (std::nothrow) IOState(resolve_url(m_io->m_fname,strPublicId,strSystemId));
+	m_io->m_next = new (std::nothrow) IOState(resolve_url(m_io->m_fname,strPublicId,strSystemId),get_version());
 	if (!m_io->m_next)
 		throw "Out of memory";
 

@@ -27,7 +27,7 @@
 	S             =    (0x20 | 0x9 | 0xD | 0xA)+;
 	Eq            =    S? '=' S?;
 
-	VersionNum    =    ('1.' [0-9]+);
+	VersionNum    =    ('1.' [0-9]* ${token.push(m_char);}) %{set_version(token);};
 	VersionInfo   =    S 'version' Eq ("'" VersionNum "'" | '"' VersionNum '"');
 	EncName       =    ([a-zA-Z] ([a-zA-Z0-9._] | '-')*) ${token.push(m_char);};
 	EncodingDecl  =    S 'encoding' Eq ('"' EncName '"' | "'" EncName "'" ) @{set_encoding(token,strEncoding);};
@@ -92,5 +92,8 @@ void IOState::init(bool entity, OOBase::String& strEncoding, bool& standalone)
 		} 
 	}
 	
+	if (m_version == (unsigned int)-1)
+		m_version = 0;
+		
 	switch_encoding(strEncoding);
 }

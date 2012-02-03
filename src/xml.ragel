@@ -49,7 +49,10 @@
     utf8_four_byte           = utf8_four_byte_basic - utf8_four_byte_overlong - utf8_four_byte_reserved;
     utf8_char                = (utf8_one_byte | utf8_two_byte | utf8_three_byte | utf8_four_byte);
 	
-	Char          =    utf8_char - ((0x00..0x08) | 0x0B | 0x0C | (0x0E..0x1F) | (0xEF 0xBF 0xBE) | (0xEF 0xBF 0xBF));
+	Char_v0_extra =    0x7F | 0xC2 (0x80..0x84) | 0xC2 (0x86..0x9F);
+	Char_v1       =    utf8_char - ((0x00..0x08) | 0x0B | 0x0C | (0x0E..0x1F) | 0x7F | 0xC2 (0x80..0x84) | 0xC2 (0x86..0x9F) | (0xEF 0xBF 0xBE) | (0xEF 0xBF 0xBF));
+		
+	Char          =    Char_v1 | (Char_v0_extra when {get_version()!=1});
 	                   
 	S             =    (0x20 | 0x9 | 0xD | 0xA)+;
 	Eq            =    S? '=' S?;
@@ -64,13 +67,13 @@
 	                   | (0xCE..0xDF) utf8_cont                                    # [#x37F-#x7FF]
 	                   | (((0xE0..0xE1) utf8_cont{2} ) - utf8_three_byte_overlong) # [#x800-#x1FFF]
 	                   | 0xE2 0x80 (0x8C | 0x8D)                                   # [#x200C-#x200D]
-	                   | 0xE2 (0x81 (0xB0..0xBF) | (0x82..0x88) utf8_cont | 0x89 (0x80..0x8F)) # [#x2070-#x218F]
+	                   | 0xE2 (0x81 (0xB0..0xBF) | (0x82..0x85) utf8_cont | 0x86 (0x80..0x8F)) # [#x2070-#x218F]
 	                   | 0xE2 ((0xB0..0xBE) utf8_cont | 0xBF (0x80..0xAF))         # [#x2C00-#x2FEF]
 	                   | 0xE3 (0x80 (0x81..0xBF) | (0x81..0xBF) utf8_cont)         # [#x3001-#x3FFF]
 	                   | (0xE4..0xEC) utf8_cont{2} | 0xED (0x80..0x9F) utf8_cont   # [#x4000-#xD7FF]
 	                   | 0xEF ((0xA4..0xB6) utf8_cont | 0xB7 (0x80..0x87))         # [#xF900-#xFDCF]
 	                   | 0xEF (0xB7 (0xB0..0xBF) | (0xB8..0xBF) utf8_cont)         # [#xFDF0-#xFFFD]
-	                   | utf8_four_byte;                                           # [#x10000-#xEFFFF]
+	                   | (utf8_four_byte - ((0xF3 (0xB0..0xBF) | 0xF4 utf8_cont) utf8_cont{2})); # [#x10000-#xEFFFF]
 	 
 	NameChar      =    NameStartChar | "-" | "." | [0-9]
 	                   | 0xC2 0xB7                          #  #xB7
@@ -162,7 +165,7 @@
 	
 	CReference    =    CharRef | EntityRef @{if(subst_content_entity()) fcall CParsedEnt;};	
 	element       =    '<' QName $append %{TOKEN(ElementStart)} (S Attribute)* S? ('/>' @{TOKEN(ElementEnd)} | '>' @{fcall content_i;});
-	content       =    CharData ((element | CDSect | PI | Comment | CReference) CharData)*;
+	content       =    CharData? ((element | CDSect | PI | Comment | CReference) CharData?)*;
 	content_i    :=    content '</' QName $append S? '>' @{TOKEN(ElementEnd);fret;};    
 	
 	Ignore        =    Char* -- ('<![' | ']]>');

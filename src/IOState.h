@@ -31,8 +31,8 @@
 class IOState
 {
 public:
-	IOState(const OOBase::String& fname);
-	IOState(const OOBase::String& entity_name, const OOBase::String& repl_text);
+	IOState(const OOBase::String& fname, unsigned int version = (unsigned int)-1);
+	IOState(const OOBase::String& entity_name, unsigned int version, const OOBase::String& repl_text);
 	~IOState();
 
 	void init(OOBase::String& strEncoding, bool& standalone);
@@ -42,6 +42,7 @@ public:
 	bool is_eof() const;
 	void rappend(const OOBase::String& str);
 	void push(unsigned char c);
+	unsigned int get_version();
 
 	OOBase::String m_fname;
 	size_t         m_col;
@@ -89,12 +90,14 @@ private:
 	void init(bool entity, OOBase::String& strEncoding, bool& standalone);
 	unsigned char get_char(bool& from_input);
 	void switch_encoding(OOBase::String& strEncoding);
+	void set_version(Token& token);
 
 	Decoder*       m_decoder;
 	Decoder::eType m_decoder_type;
 	IO*            m_io;
 	bool           m_eof;
 	Token          m_input;
+	unsigned int   m_version;
 };
 
 #endif // IOSTATE_H_INCLUDED_

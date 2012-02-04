@@ -29,11 +29,56 @@ static size_t failed = 0;
 
 static const int verbose = 0;
 
-static bool do_test(const OOBase::String& strURI, bool fail_expected)
+static bool do_wf_test(const OOBase::String& strURI, bool fail_expected)
+{
+	OOBase::Stack<OOBase::String> elements;
+	OOBase::Set<OOBase::String> attributes;
+
+	Tokenizer tok;
+
+	tok.load(strURI);
+
+	Tokenizer::TokenType tok_type;
+	do
+	{
+		OOBase::String strToken;
+		tok_type = tok.next_token(strToken,verbose);
+
+		if (tok_type == Tokenizer::ElementStart)
+		{
+			elements.push(strToken);
+			attributes.clear();
+		}
+		else if (tok_type == Tokenizer::AttributeName)
+		{
+			if (attributes.exists(strToken))
+				return false;
+
+			attributes.insert(strToken);
+		}
+		else if (tok_type == Tokenizer::ElementEnd)
+		{
+			OOBase::String strE;
+			elements.pop(&strE);
+
+			if (!strToken.empty() && strE != strToken)
+				return false;
+		}
+	}
+	while (tok_type != Tokenizer::End && tok_type != Tokenizer::Error);
+
+	if (tok_type == Tokenizer::Error && !fail_expected)
+		printf("\nSyntax error at %s, line %lu, col %lu\n",tok.get_location().c_str(),tok.get_line(),tok.get_column());
+
+	return (tok_type == Tokenizer::End);
+}
+
+static bool do_valid_test(const OOBase::String& strURI, bool fail_expected)
 {
 	OOBase::Stack<OOBase::String> elements;
 	OOBase::Set<OOBase::String> attributes;
 	OOBase::String strDocType;
+	bool root = true;
 
 	Tokenizer tok;
 
@@ -51,12 +96,23 @@ static bool do_test(const OOBase::String& strURI, bool fail_expected)
 		}
 		else if (tok_type == Tokenizer::ElementStart)
 		{
-			if (!strDocType.empty())
+			if (root)
 			{
-				if (strToken != strDocType)
+				if (strDocType.empty())
+				{
+					if (!fail_expected)
+						printf("No DOCTYPE\n");
 					return false;
+				}
 
-				strDocType.clear();
+				if (strToken != strDocType)
+				{
+					if (!fail_expected)
+						printf("Mismatched root element\n");
+					return false;
+				}
+
+				root = false;
 			}
 
 			elements.push(strToken);
@@ -102,7 +158,7 @@ static bool fail()
 
 static bool do_valid_test(const OOBase::String& strURI)
 {
-	if (!do_test(strURI,false))
+	if (!do_valid_test(strURI,false))
 		return fail();
 	else
 		return pass();
@@ -110,7 +166,9 @@ static bool do_valid_test(const OOBase::String& strURI)
 
 static bool do_invalid_test(const OOBase::String& strURI)
 {
-	if (do_test(strURI,true))
+	if (!do_wf_test(strURI,false))
+		return fail();
+	else if (!do_valid_test(strURI,true))
 		return pass();
 	else
 		return fail();
@@ -118,15 +176,7 @@ static bool do_invalid_test(const OOBase::String& strURI)
 
 static bool do_not_wf_test(const OOBase::String& strURI)
 {
-	if (do_test(strURI,true))
-		return fail();
-	else
-		return pass();
-}
-
-static bool do_error_test(const OOBase::String& strURI)
-{
-	if (do_test(strURI,true))
+	if (do_wf_test(strURI,true))
 		return fail();
 	else
 		return pass();
@@ -192,7 +242,7 @@ static void do_test(Tokenizer& tok, const OOBase::String& strBase)
 				else if (strType == "not-wf")
 					ret = do_not_wf_test(strURI);
 				else if (strType == "error")
-					ret = do_error_test(strURI);
+					ret = do_not_wf_test(strURI);
 				else
 					return;
 

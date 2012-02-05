@@ -168,15 +168,16 @@ void Tokenizer::next_char()
 
 void Tokenizer::general_entity()
 {
-	OOBase::String strName,strSysLiteral;
+	OOBase::String strName,strVal,strSysLiteral;
 	m_entity_name.pop(strName);
 	m_system.pop(strSysLiteral);
+	m_token.pop(strVal);
 
 	if (strSysLiteral.empty())
 	{
 		// Internal general entity
 		InternalEntity intern;
-		m_token.pop(intern.m_strValue);
+		intern.m_strValue = strVal;
 		intern.m_extern_decl = !m_internal_doctype;
 
 		int err = m_int_gen_entities.insert(strName,intern);

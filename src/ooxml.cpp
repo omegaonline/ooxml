@@ -343,6 +343,9 @@ int main( int argc, char* argv[] )
 	}
 	while (tok_type != Tokenizer::End && tok_type != Tokenizer::Error);
 
+	if (tok_type == Tokenizer::Error)
+		printf("\nSyntax error at %s, line %lu, col %lu\n",tok.get_location().c_str(),tok.get_line(),tok.get_column());
+
 	printf("\n%lu passed, %lu failed\n",passed,failed);
 		
 	return 0;

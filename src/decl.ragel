@@ -31,7 +31,8 @@
 	VersionInfo   =    S 'version' Eq ("'" VersionNum "'" | '"' VersionNum '"');
 	EncName       =    ([a-zA-Z] ([a-zA-Z0-9._] | '-')*) ${token.push(m_char);};
 	EncodingDecl  =    S 'encoding' Eq ('"' EncName '"' | "'" EncName "'" ) @{set_encoding(token,strEncoding);};
-	SDDecl        =    S 'standalone' Eq (("'" ('yes' @{standalone=true;} | 'no') "'") | ('"' ('yes'@{standalone=true;} | 'no') '"'));
+	SA            =    'yes' @{standalone=true;} | 'no';
+	SDDecl        =    S 'standalone' Eq ("'" SA "'" | '"' SA '"');
 	
 	BOM           =    (0xFE 0xFF) @{set_decoder(Decoder::UTF16BE);}
 	                   | (0xFF 0xFE) @{set_decoder(Decoder::UTF16LE);}
@@ -66,7 +67,6 @@
 void IOState::init(bool entity, OOBase::String& strEncoding, bool& standalone)
 {
 	IOState&        p   = *this;
-	const EndOfFile eof = EndOfFile();
 	
 	Token token;
 	Token backup;

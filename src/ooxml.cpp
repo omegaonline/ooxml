@@ -136,9 +136,6 @@ static bool do_valid_test(const OOBase::String& strURI, bool fail_expected)
 	}
 	while (tok_type != Tokenizer::End && tok_type != Tokenizer::Error);
 
-	if (tok_type == Tokenizer::Error && !fail_expected)
-		printf("\nSyntax error at %s, line %lu, col %lu\n",tok.get_location().c_str(),tok.get_line(),tok.get_column());
-
 	return (tok_type == Tokenizer::End);
 }
 
@@ -158,10 +155,16 @@ static bool fail()
 
 static bool do_valid_test(const OOBase::String& strURI)
 {
-	if (!do_valid_test(strURI,false))
-		return fail();
-	else
+	if (do_valid_test(strURI,false))
 		return pass();
+	else if (do_wf_test(strURI,false))
+	{
+		printf("[Well-formed] ");
+		++passed;
+		return false;
+	}
+	else
+		return fail();
 }
 
 static bool do_invalid_test(const OOBase::String& strURI)
@@ -171,7 +174,11 @@ static bool do_invalid_test(const OOBase::String& strURI)
 	else if (!do_valid_test(strURI,true))
 		return pass();
 	else
-		return fail();
+	{
+		printf("[Well-formed] ");
+		++passed;
+		return false;
+	}
 }
 
 static bool do_not_wf_test(const OOBase::String& strURI)

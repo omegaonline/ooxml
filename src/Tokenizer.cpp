@@ -46,17 +46,20 @@ Tokenizer::Tokenizer() :
 		{NULL,NULL}
 	};
 
-	for (const struct predef* p = predefined;p->k != NULL;++p)
+	for (const predef* p = predefined;p->k != NULL;++p)
 	{
-		OOBase::String strKey,strValue;
+		InternalEntity intern;
+		intern.m_extern_decl = false;
+
+		OOBase::String strKey;
 		int err = strKey.assign(p->k);
 		if (err == 0)
-			err = strValue.assign(p->v);
+			err = intern.m_strValue.assign(p->v);
 
 		if (err != 0)
 			throw "Out of memory";
 
-		m_int_gen_entities.insert(strKey,strValue);
+		m_int_gen_entities.insert(strKey,intern);
 	}
 }
 
@@ -165,22 +168,25 @@ void Tokenizer::next_char()
 
 void Tokenizer::general_entity()
 {
-	OOBase::String strName,strVal,strSysLiteral;
+	OOBase::String strName,strSysLiteral;
 	m_entity_name.pop(strName);
 	m_system.pop(strSysLiteral);
-	m_token.pop(strVal);
 
 	if (strSysLiteral.empty())
 	{
 		// Internal general entity
-		int err = m_int_gen_entities.insert(strName,strVal);
+		InternalEntity intern;
+		m_token.pop(intern.m_strValue);
+		intern.m_extern_decl = !m_internal_doctype;
+
+		int err = m_int_gen_entities.insert(strName,intern);
 		if (err != 0 && err != EEXIST)
 			throw "Out of memory";
 	}
 	else
 	{
 		// Unparsed entity or external parsed entity
-		struct External ext;
+		ExternalEntity ext;
 		ext.m_strSystemId = strSysLiteral;
 		m_entity.pop(ext.m_strNData);
 		m_public.pop(ext.m_strPublicId);
@@ -208,7 +214,7 @@ void Tokenizer::param_entity()
 	else
 	{
 		// External parameter entity
-		struct External ext;
+		ExternalEntity ext;
 		ext.m_strSystemId = strSysLiteral;
 		m_public.pop(ext.m_strPublicId);
 
@@ -223,9 +229,18 @@ void Tokenizer::bypass_entity()
 	OOBase::String strEnt;
 	m_entity.pop(strEnt);
 
-	External* pExt = m_ext_gen_entities.find(strEnt);
-	if (pExt && !pExt->m_strNData.empty())
-		throw "Unparsed entity reference in entity value";
+	ExternalEntity* pExt = m_ext_gen_entities.find(strEnt);
+	if (pExt)
+	{
+		if (!pExt->m_strNData.empty())
+			throw "Unparsed entity reference in entity value";
+
+		if (m_standalone)
+		{
+			printf("External in standalone document\n");
+			throw "External in standalone document";
+		}
+	}
 
 	m_token.push('&');
 	for (const char* sz = strEnt.c_str();*sz != '\0';++sz)
@@ -239,8 +254,17 @@ void Tokenizer::check_entity_recurse(const OOBase::String& strEnt)
 	for (IOState* io = m_io;io != NULL; io=io->m_next)
 	{
 		if (io->m_fname == strEnt)
-			throw "Recursive entity!";
+			throw "WFC: No Recursion";
 	}
+}
+
+OOBase::String Tokenizer::get_external_fname() const
+{
+	IOState* io=m_io;
+	while (io != NULL && !io->is_file())
+		io = io->m_next;
+
+	return (io ? io->m_fname : OOBase::String());
 }
 
 bool Tokenizer::subst_content_entity()
@@ -250,10 +274,13 @@ bool Tokenizer::subst_content_entity()
 
 	IOState* n = NULL;
 
-	OOBase::String* pInt = m_int_gen_entities.find(strEnt);
+	InternalEntity* pInt = m_int_gen_entities.find(strEnt);
 	if (pInt)
 	{
-		if (!pInt->empty())
+		if (m_standalone && pInt->m_extern_decl)
+			throw "VC: External in standalone document";
+
+		if (!pInt->m_strValue.empty())
 		{
 			OOBase::String strFull;
 			int err = strFull.concat("&",strEnt.c_str());
@@ -264,34 +291,33 @@ bool Tokenizer::subst_content_entity()
 
 			check_entity_recurse(strFull);
 
-			n = new (std::nothrow) IOState(strFull,get_version(),*pInt);
+			n = new (std::nothrow) IOState(strFull,get_version(),pInt->m_strValue);
 			if (!n)
 				throw "Out of memory";
 		}
 	}
 	else
 	{
-		External* pExt = m_ext_gen_entities.find(strEnt);
+		ExternalEntity* pExt = m_ext_gen_entities.find(strEnt);
 		if (!pExt)
-			throw "Unrecognized entity";
+			throw "WFC: Entity Declared";
+
+		if (m_standalone) // validity error only
+			throw "VC: External in standalone document";
 
 		if (!pExt->m_strNData.empty())
-		{
-			void* TODO; // Unparsed entity handling
-		}
-		else
-		{
-			OOBase::String strExt = resolve_url(m_io->m_fname,pExt->m_strPublicId,pExt->m_strSystemId);
+			throw "WFC: Parsed Entity";
 
-			check_entity_recurse(strExt);
+		OOBase::String strExt = resolve_url(get_external_fname(),pExt->m_strPublicId,pExt->m_strSystemId);
 
-			// Start pulling from external source
-			n = new (std::nothrow) IOState(strExt,get_version());
-			if (!n)
-				throw "Out of memory";
+		check_entity_recurse(strExt);
 
-			n->init();
-		}
+		// Start pulling from external source
+		n = new (std::nothrow) IOState(strExt,get_version());
+		if (!n)
+			throw "Out of memory";
+
+		n->init();
 	}
 
 	if (n)
@@ -308,11 +334,23 @@ bool Tokenizer::subst_attr_entity()
 	OOBase::String strEnt;
 	m_entity.pop(strEnt);
 
-	OOBase::String* pInt = m_int_gen_entities.find(strEnt);
+	InternalEntity* pInt = m_int_gen_entities.find(strEnt);
 	if (!pInt)
-		throw "External entity in attribute value";
+	{
+		if (m_ext_param_entities.find(strEnt) != NULL)
+			throw "WFC: No External Entity References";
 
-	if (!pInt->empty())
+		//if (m_standalone)
+			throw "WFC: Entity Declared";
+
+		// Otherwise a VC
+		//return false;
+	}
+
+	if (m_standalone && pInt->m_extern_decl)
+		throw "WFC: Entity Declared";
+
+	if (!pInt->m_strValue.empty())
 	{
 		OOBase::String strFull;
 		int err = strFull.concat("&",strEnt.c_str());
@@ -323,7 +361,7 @@ bool Tokenizer::subst_attr_entity()
 
 		check_entity_recurse(strFull);
 
-		IOState* n = new (std::nothrow) IOState(strFull,get_version(),*pInt);
+		IOState* n = new (std::nothrow) IOState(strFull,get_version(),pInt->m_strValue);
 		if (!n)
 			throw "Out of memory";
 
@@ -331,7 +369,7 @@ bool Tokenizer::subst_attr_entity()
 		m_io = n;
 	}
 
-	return (!pInt->empty());
+	return (!pInt->m_strValue.empty());
 }
 
 bool Tokenizer::subst_pentity()
@@ -342,7 +380,7 @@ bool Tokenizer::subst_pentity()
 	IOState* n = NULL;
 
 	if (m_internal_doctype)
-		throw "PE in Internal Subset";
+		throw "WFC: PEs in Internal Subset";
 
 	OOBase::String* pInt = m_int_param_entities.find(strEnt);
 	if (pInt)
@@ -365,11 +403,11 @@ bool Tokenizer::subst_pentity()
 	}
 	else
 	{
-		External* pExt = m_ext_param_entities.find(strEnt);
+		ExternalEntity* pExt = m_ext_param_entities.find(strEnt);
 		if (!pExt)
 			throw "Unrecognized entity";
 
-		OOBase::String strExt = resolve_url(m_io->m_fname,pExt->m_strPublicId,pExt->m_strSystemId);
+		OOBase::String strExt = resolve_url(get_external_fname(),pExt->m_strPublicId,pExt->m_strSystemId);
 
 		check_entity_recurse(strExt);
 
@@ -417,11 +455,11 @@ void Tokenizer::include_pe(bool auto_pop)
 	}
 	else
 	{
-		External* pExt = m_ext_param_entities.find(strEnt);
+		ExternalEntity* pExt = m_ext_param_entities.find(strEnt);
 		if (!pExt)
 			throw "Unrecognized entity";
 
-		OOBase::String strExt = resolve_url(m_io->m_fname,pExt->m_strPublicId,pExt->m_strSystemId);
+		OOBase::String strExt = resolve_url(get_external_fname(),pExt->m_strPublicId,pExt->m_strSystemId);
 
 		check_entity_recurse(strExt);
 
@@ -462,7 +500,7 @@ void Tokenizer::subst_char(int base)
 			(v >= 0xFFFE && v <= 0xFFFF) ||
 			v > 0x10FFFF)
 		{
-			throw "Invalid Char";
+			throw "WFC: Illegal Char";
 		}
 	}
 	else if ((v <= 0x1F && v != 0x9 && v != 0xA && v != 0xD) ||
@@ -470,7 +508,7 @@ void Tokenizer::subst_char(int base)
 			(v >= 0xFFFE && v <= 0xFFFF) ||
 			v > 0x10FFFF)
 	{
-		throw "Invalid Char";
+		throw "WFC: Illegal Char";
 	}
 
 	// Now recode v as UTF-8...

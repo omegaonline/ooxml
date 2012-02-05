@@ -85,17 +85,23 @@ private:
 
 	IOState* m_io;
 
-	OOBase::HashTable<OOBase::String,OOBase::String> m_int_gen_entities;
 	OOBase::HashTable<OOBase::String,OOBase::String> m_int_param_entities;
 
-	struct External
+	struct InternalEntity
+	{
+		OOBase::String m_strValue;
+		bool           m_extern_decl;
+	};
+	OOBase::HashTable<OOBase::String,InternalEntity> m_int_gen_entities;
+
+	struct ExternalEntity
 	{
 		OOBase::String m_strPublicId;
 		OOBase::String m_strSystemId;
 		OOBase::String m_strNData;
 	};
-	OOBase::HashTable<OOBase::String,External> m_ext_gen_entities;
-	OOBase::HashTable<OOBase::String,External> m_ext_param_entities;
+	OOBase::HashTable<OOBase::String,ExternalEntity> m_ext_gen_entities;
+	OOBase::HashTable<OOBase::String,ExternalEntity> m_ext_param_entities;
 		
 	// These are the private members used by Ragel
 	Tokenizer& operator ++ ()
@@ -140,7 +146,7 @@ private:
 
 	void next_char();
 	void set_token(ParseState& pe, enum TokenType type, size_t offset = 0, bool allow_empty = true);
-	
+	OOBase::String get_external_fname() const;
 	void bypass_entity();
 	void check_entity_recurse(const OOBase::String& strEnt);
 	void general_entity();

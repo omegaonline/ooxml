@@ -43,6 +43,7 @@ public:
 	void rappend(const OOBase::String& str);
 	void push(unsigned char c);
 	unsigned int get_version();
+	bool is_file() const;
 
 	OOBase::String m_fname;
 	size_t         m_col;
@@ -68,16 +69,6 @@ private:
 	{
 		m_char = next_char();
 		return *this;
-	}
-
-	struct EndOfFile
-	{
-		int unused;
-	};
-
-	bool operator == (const EndOfFile&) const
-	{
-		return (m_io == NULL || m_io->is_eof());
 	}
 
 	unsigned char operator * () const

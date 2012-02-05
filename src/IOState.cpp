@@ -121,7 +121,7 @@ void IOState::switch_encoding(OOBase::String& strEncoding)
 	}
 
 	if (strEncoding != "UTF-8" && strEncoding != "utf-8" && strEncoding != "UTF8" && strEncoding != "utf8")
-		printf("NO ENCODER FOR %s  -  WILL FAIL!\n",strEncoding.c_str());
+		printf("NO ENCODER FOR %s - WILL FAIL! ",strEncoding.c_str());
 }
 
 unsigned char IOState::get_char(bool& from_input)
@@ -151,6 +151,11 @@ unsigned char IOState::get_char(bool& from_input)
 		m_eof = true;
 
 	return c;
+}
+
+bool IOState::is_file() const
+{
+	return (m_io != NULL);
 }
 
 unsigned int IOState::get_version()

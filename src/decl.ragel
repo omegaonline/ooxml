@@ -92,6 +92,8 @@ void IOState::init(bool entity, OOBase::String& strEncoding, bool& standalone)
 		} 
 	}
 	
+	m_preinit = false;
+	
 	if (m_version == (unsigned int)-1)
 		m_version = 0;
 		

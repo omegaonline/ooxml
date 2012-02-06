@@ -87,6 +87,7 @@ private:
 	Decoder::eType m_decoder_type;
 	IO*            m_io;
 	bool           m_eof;
+	bool           m_preinit;
 	Token          m_input;
 	unsigned int   m_version;
 };

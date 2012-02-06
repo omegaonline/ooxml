@@ -31,6 +31,7 @@ IOState::IOState(const OOBase::String& fname, unsigned int version) :
 		m_decoder_type(Decoder::None),
 		m_io(new (std::nothrow) IO()),
 		m_eof(false),
+		m_preinit(true),
 		m_version(version)
 {
 	if (!m_io)
@@ -51,6 +52,7 @@ IOState::IOState(const OOBase::String& entity_name, unsigned int version, const 
 		m_decoder_type(Decoder::None),
 		m_io(NULL),
 		m_eof(repl_text.empty()),
+		m_preinit(true),
 		m_version(version)
 {
 	m_input.rappend(repl_text);
@@ -180,7 +182,7 @@ unsigned char IOState::next_char()
 			c = '\n';
 
 			unsigned char n = get_char(from_input);
-			if (m_version == 1 && n == 0xC2)
+			if (!m_preinit && m_version == 1 && n == 0xC2)
 			{
 				unsigned char n2 = get_char(from_input);
 				if (n2 != 0x85)
@@ -192,7 +194,7 @@ unsigned char IOState::next_char()
 			else if (n != '\n')
 				m_input.push(n);
 		}
-		else if (m_version == 1)
+		else if (!m_preinit && m_version == 1)
 		{
 			if (c == 0xC2)
 			{

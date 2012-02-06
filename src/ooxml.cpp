@@ -189,6 +189,15 @@ static bool do_not_wf_test(const OOBase::String& strURI)
 		return pass();
 }
 
+static bool do_error_test(const OOBase::String& strURI)
+{
+	if (!do_wf_test(strURI,true))
+		return pass();
+
+	printf("[No error]\n");
+	return true;
+}
+
 static void do_test(Tokenizer& tok, const OOBase::String& strBase)
 {
 	OOBase::String strType,strText;
@@ -249,7 +258,7 @@ static void do_test(Tokenizer& tok, const OOBase::String& strBase)
 				else if (strType == "not-wf")
 					ret = do_not_wf_test(strURI);
 				else if (strType == "error")
-					ret = do_not_wf_test(strURI);
+					ret = do_error_test(strURI);
 				else
 					return;
 

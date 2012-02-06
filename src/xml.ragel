@@ -169,8 +169,8 @@
 	content_i    :=    content '</' QName $append S? '>' @{TOKEN(ElementEnd);fret;};    
 	
 	Ignore        =    Char* -- ('<![' | ']]>');
-	ignoreSectContents = Ignore ('<![' @{fcall ignoreSectContents_i;} ']]>' Ignore)*;
-	ignoreSectContents_i := ignoreSectContents %return;
+	ignoreSectContents = Ignore ('<![' @{fcall ignoreSectContents_i;} Ignore)*;
+	ignoreSectContents_i := ignoreSectContents ']]>' @return;
 	
 	includeSect   =    'INCLUDE' PS? '[' @{fgoto includeSect_i;};
 	ignoreSect    =    'IGNORE' PS? '[' ignoreSectContents ']]>' @return;

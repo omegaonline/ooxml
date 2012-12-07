@@ -64,12 +64,12 @@
 
 %% write data;
 
-void IOState::init(bool entity, OOBase::String& strEncoding, bool& standalone)
+void IOState::init(bool entity, OOBase::LocalString& strEncoding, bool& standalone)
 {
 	IOState&        p   = *this;
 	
-	Token token;
-	Token backup;
+	Token token(m_allocator);
+	Token backup(m_allocator);
 
 	%% write init;
 	

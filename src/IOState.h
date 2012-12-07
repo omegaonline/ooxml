@@ -31,33 +31,41 @@
 class IOState
 {
 public:
-	IOState(const OOBase::String& fname, unsigned int version = (unsigned int)-1);
-	IOState(const OOBase::String& entity_name, unsigned int version, const OOBase::String& repl_text);
-	~IOState();
+	static IOState* create(OOBase::AllocatorInstance& allocator, const OOBase::LocalString& fname, unsigned int version = (unsigned int)-1);
+	static IOState* create(OOBase::AllocatorInstance& allocator, const OOBase::LocalString& entity_name, unsigned int version, const OOBase::LocalString& repl_text);
 
-	void init(OOBase::String& strEncoding, bool& standalone);
+	void destroy();
+
+	void init(OOBase::LocalString& strEncoding, bool& standalone);
 	void init();
 
 	unsigned char next_char();
 	bool is_eof() const;
-	void rappend(const OOBase::String& str);
+	void rappend(const OOBase::LocalString& str);
 	void push(unsigned char c);
 	unsigned int get_version();
 	bool is_file() const;
 
-	OOBase::String m_fname;
-	size_t         m_col;
-	size_t         m_line;
-	IOState*       m_next;
-	bool           m_auto_pop;
+	OOBase::LocalString m_fname;
+	size_t              m_col;
+	size_t              m_line;
+	IOState*            m_next;
+	bool                m_auto_pop;
 
 private:
+	IOState(OOBase::AllocatorInstance& allocator, const OOBase::LocalString& fname, unsigned int version);
+	IOState(OOBase::AllocatorInstance& allocator, const OOBase::LocalString& entity_name, unsigned int version, const OOBase::LocalString& repl_text);
+
+	~IOState();
+
 	IOState(const IOState&);
 	IOState& operator = (const IOState&);
 
 	// These are the private members used by Ragel
 	int           m_cs;
 	unsigned char m_char;
+
+	OOBase::AllocatorInstance& m_allocator;
 
 	IOState& operator += (int)
 	{
@@ -77,10 +85,10 @@ private:
 	}
 
 	void set_decoder(Decoder::eType type);
-	void set_encoding(Token& token, OOBase::String& str);
-	void init(bool entity, OOBase::String& strEncoding, bool& standalone);
+	void set_encoding(Token& token, OOBase::LocalString& str);
+	void init(bool entity, OOBase::LocalString& strEncoding, bool& standalone);
 	unsigned char get_char(bool& from_input);
-	void switch_encoding(OOBase::String& strEncoding);
+	void switch_encoding(OOBase::LocalString& strEncoding);
 	void set_version(Token& token);
 
 	Decoder*       m_decoder;

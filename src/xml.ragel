@@ -208,7 +208,7 @@ void Tokenizer::do_init()
 	%% write init;
 }
 
-Tokenizer::TokenType Tokenizer::next_token(OOBase::String& strToken, int verbose)
+Tokenizer::TokenType Tokenizer::next_token(OOBase::LocalString& strToken, int verbose)
 {
 	// Ragel variables
 	Tokenizer&      p   = *this;

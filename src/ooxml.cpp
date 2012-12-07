@@ -22,6 +22,7 @@
 #include "Tokenizer.h"
 
 #include <OOBase/Stack.h>
+#include <OOBase/ArenaAllocator.h>
 #include <OOBase/Set.h>
 
 static size_t passed = 0;
@@ -29,19 +30,19 @@ static size_t failed = 0;
 
 static const int verbose = 0;
 
-static bool do_wf_test(const OOBase::String& strURI, bool fail_expected)
+static bool do_wf_test(OOBase::AllocatorInstance& allocator, const OOBase::LocalString& strURI, bool fail_expected)
 {
-	OOBase::Stack<OOBase::String> elements;
-	OOBase::Set<OOBase::String> attributes;
+	OOBase::Stack<OOBase::LocalString,OOBase::AllocatorInstance> elements(allocator);
+	OOBase::Set<OOBase::LocalString,OOBase::AllocatorInstance> attributes(allocator);
 
-	Tokenizer tok;
+	Tokenizer tok(allocator);
 
 	tok.load(strURI);
 
 	Tokenizer::TokenType tok_type;
 	do
 	{
-		OOBase::String strToken;
+		OOBase::LocalString strToken(allocator);
 		tok_type = tok.next_token(strToken,verbose);
 
 		if (tok_type == Tokenizer::ElementStart)
@@ -58,7 +59,7 @@ static bool do_wf_test(const OOBase::String& strURI, bool fail_expected)
 		}
 		else if (tok_type == Tokenizer::ElementEnd)
 		{
-			OOBase::String strE;
+			OOBase::LocalString strE(allocator);
 			elements.pop(&strE);
 
 			if (!strToken.empty() && strE != strToken)
@@ -73,21 +74,21 @@ static bool do_wf_test(const OOBase::String& strURI, bool fail_expected)
 	return (tok_type == Tokenizer::End);
 }
 
-static bool do_valid_test(const OOBase::String& strURI, bool fail_expected)
+static bool do_valid_test(OOBase::AllocatorInstance& allocator, const OOBase::LocalString& strURI, bool fail_expected)
 {
-	OOBase::Stack<OOBase::String> elements;
-	OOBase::Set<OOBase::String> attributes;
-	OOBase::String strDocType;
+	OOBase::Stack<OOBase::LocalString,OOBase::AllocatorInstance> elements(allocator);
+	OOBase::Set<OOBase::LocalString,OOBase::AllocatorInstance> attributes(allocator);
+	OOBase::LocalString strDocType(allocator);
 	bool root = true;
 
-	Tokenizer tok;
+	Tokenizer tok(allocator);
 
 	tok.load(strURI);
 
 	Tokenizer::TokenType tok_type;
 	do
 	{
-		OOBase::String strToken;
+		OOBase::LocalString strToken(allocator);
 		tok_type = tok.next_token(strToken,verbose);
 
 		if (tok_type == Tokenizer::DocTypeStart)
@@ -127,7 +128,7 @@ static bool do_valid_test(const OOBase::String& strURI, bool fail_expected)
 		}
 		else if (tok_type == Tokenizer::ElementEnd)
 		{
-			OOBase::String strE;
+			OOBase::LocalString strE(allocator);
 			elements.pop(&strE);
 
 			if (!strToken.empty() && strE != strToken)
@@ -153,11 +154,11 @@ static bool fail()
 	return false;
 }
 
-static bool do_valid_test(const OOBase::String& strURI)
+static bool do_valid_test(OOBase::AllocatorInstance& allocator, const OOBase::LocalString& strURI)
 {
-	if (do_valid_test(strURI,false))
+	if (do_valid_test(allocator,strURI,false))
 		return pass();
-	else if (do_wf_test(strURI,false))
+	else if (do_wf_test(allocator,strURI,false))
 	{
 		printf("[Well-formed] ");
 		++passed;
@@ -167,11 +168,11 @@ static bool do_valid_test(const OOBase::String& strURI)
 		return fail();
 }
 
-static bool do_invalid_test(const OOBase::String& strURI)
+static bool do_invalid_test(OOBase::AllocatorInstance& allocator, const OOBase::LocalString& strURI)
 {
-	if (!do_wf_test(strURI,false))
+	if (!do_wf_test(allocator,strURI,false))
 		return fail();
-	else if (!do_valid_test(strURI,true))
+	else if (!do_valid_test(allocator,strURI,true))
 		return pass();
 	else
 	{
@@ -181,33 +182,33 @@ static bool do_invalid_test(const OOBase::String& strURI)
 	}
 }
 
-static bool do_not_wf_test(const OOBase::String& strURI)
+static bool do_not_wf_test(OOBase::AllocatorInstance& allocator, const OOBase::LocalString& strURI)
 {
-	if (do_wf_test(strURI,true))
+	if (do_wf_test(allocator,strURI,true))
 		return fail();
 	else
 		return pass();
 }
 
-static bool do_error_test(const OOBase::String& strURI)
+static bool do_error_test(OOBase::AllocatorInstance& allocator, const OOBase::LocalString& strURI)
 {
-	if (!do_wf_test(strURI,true))
+	if (!do_wf_test(allocator,strURI,true))
 		return pass();
 
 	printf("[No error]\n");
 	return true;
 }
 
-static void do_test(Tokenizer& tok, const OOBase::String& strBase)
+static void do_test(OOBase::AllocatorInstance& allocator, Tokenizer& tok, const OOBase::LocalString& strBase)
 {
-	OOBase::String strType,strText;
-	OOBase::String strURI = strBase;
-	OOBase::String strEdition;
-	OOBase::String strNamespace;
+	OOBase::LocalString strType(allocator),strText(allocator);
+	OOBase::LocalString strURI = strBase;
+	OOBase::LocalString strEdition(allocator);
+	OOBase::LocalString strNamespace(allocator);
 	Tokenizer::TokenType tok_type;
 	do
 	{
-		OOBase::String strToken;
+		OOBase::LocalString strToken(allocator);
 		tok_type = tok.next_token(strToken,verbose);
 
 		if (tok_type == Tokenizer::AttributeName)
@@ -246,19 +247,19 @@ static void do_test(Tokenizer& tok, const OOBase::String& strBase)
 		{
 			if (strNamespace == "no")
 				printf("Skipping, test only applies to non-namespace parsers\n");
-			else if (!strEdition.empty() && strEdition.find('5') == OOBase::String::npos)
+			else if (!strEdition.empty() && strEdition.find('5') == OOBase::LocalString::npos)
 				printf("Skipping, test only applies to editions %s\n",strEdition.c_str());
 			else
 			{
 				bool ret = false;
 				if (strType == "valid")
-					ret = do_valid_test(strURI);
+					ret = do_valid_test(tok.get_allocator(),strURI);
 				else if (strType == "invalid")
-					ret = do_invalid_test(strURI);
+					ret = do_invalid_test(tok.get_allocator(),strURI);
 				else if (strType == "not-wf")
-					ret = do_not_wf_test(strURI);
+					ret = do_not_wf_test(tok.get_allocator(),strURI);
 				else if (strType == "error")
-					ret = do_error_test(strURI);
+					ret = do_error_test(tok.get_allocator(),strURI);
 				else
 					return;
 
@@ -272,13 +273,13 @@ static void do_test(Tokenizer& tok, const OOBase::String& strBase)
 	while (tok_type != Tokenizer::End && tok_type != Tokenizer::Error);
 }
 
-static void do_test_cases(Tokenizer& tok, const OOBase::String& strParent)
+static void do_test_cases(OOBase::AllocatorInstance& allocator, Tokenizer& tok, const OOBase::LocalString& strParent)
 {
-	OOBase::String strBase = strParent;
+	OOBase::LocalString strBase = strParent;
 	Tokenizer::TokenType tok_type;
 	do
 	{
-		OOBase::String strToken;
+		OOBase::LocalString strToken(allocator);
 		tok_type = tok.next_token(strToken,verbose);
 
 		if (tok_type == Tokenizer::AttributeName)
@@ -297,9 +298,9 @@ static void do_test_cases(Tokenizer& tok, const OOBase::String& strParent)
 		else if (tok_type == Tokenizer::ElementStart)
 		{
 			if (strToken == "TESTCASES")
-				do_test_cases(tok,strBase);
+				do_test_cases(allocator,tok,strBase);
 			else if (strToken == "TEST")
-				do_test(tok,strBase);
+				do_test(allocator,tok,strBase);
 		}
 		else if (tok_type == Tokenizer::ElementEnd && strToken == "TESTCASES")
 			return;
@@ -307,12 +308,12 @@ static void do_test_cases(Tokenizer& tok, const OOBase::String& strParent)
 	while (tok_type != Tokenizer::End && tok_type != Tokenizer::Error);
 }
 
-static void do_test_suite(Tokenizer& tok, const OOBase::String& strParent)
+static void do_test_suite(OOBase::AllocatorInstance& allocator, Tokenizer& tok, const OOBase::LocalString& strParent)
 {
 	Tokenizer::TokenType tok_type;
 	do
 	{
-		OOBase::String strToken;
+		OOBase::LocalString strToken(allocator);
 		tok_type = tok.next_token(strToken,verbose);
 
 		if (tok_type == Tokenizer::AttributeName && strToken == "PROFILE")
@@ -321,22 +322,39 @@ static void do_test_suite(Tokenizer& tok, const OOBase::String& strParent)
 				printf("\nRunning suite: %s\n",strToken.c_str());
 		}
 		else if (tok_type == Tokenizer::ElementStart && strToken == "TESTCASES")
-			do_test_cases(tok,strParent);
+			do_test_cases(allocator,tok,strParent);
 		else if (tok_type == Tokenizer::ElementEnd && strToken == "TESTSUITE")
 			return;
 	}
 	while (tok_type != Tokenizer::End && tok_type != Tokenizer::Error);
 }
 
+static void split_dir_and_fname(const char* path, OOBase::LocalString& dir, OOBase::LocalString& file)
+{
+	const char* s = strrchr(path,'/');
+	if (!s)
+	{
+		dir.assign(path);
+		if (dir.c_str()[dir.length()-1] != '/')
+			dir.append("/",1);
+	}
+	else
+	{
+		dir.assign(path,s - path + 1);
+		file.assign(s+1);
+	}
+}
+
 int main( int argc, char* argv[] )
 {
-	OOBase::String path,file;
-	OOBase::Paths::SplitDirAndFilename(argv[1],path,file);
-	OOBase::Paths::AppendDirSeparator(path);
+	//OOBase::StackAllocator<4096> allocator;
+	OOBase::ArenaAllocator allocator;
+	Tokenizer tok(allocator);
 
-	Tokenizer tok;
+	OOBase::LocalString path(allocator),file(allocator);
+	split_dir_and_fname(argv[1],path,file);
 
-	OOBase::String strLoad;
+	OOBase::LocalString strLoad(allocator);
 	strLoad.assign(argv[1]);
 
 	tok.load(strLoad);
@@ -344,11 +362,11 @@ int main( int argc, char* argv[] )
 	Tokenizer::TokenType tok_type;
 	do
 	{
-		OOBase::String strToken;
+		OOBase::LocalString strToken(allocator);
 		tok_type = tok.next_token(strToken,verbose);
 
 		if (tok_type == Tokenizer::ElementStart && strToken == "TESTSUITE")
-			do_test_suite(tok,path);
+			do_test_suite(allocator,tok,path);
 	}
 	while (tok_type != Tokenizer::End && tok_type != Tokenizer::Error);
 
@@ -360,11 +378,11 @@ int main( int argc, char* argv[] )
 	return 0;
 }
 
-OOBase::String resolve_url(const OOBase::String& strBase, const OOBase::String& strPublicId, const OOBase::String& strSystemId)
+OOBase::LocalString resolve_url(const OOBase::LocalString& strBase, const OOBase::LocalString& strPublicId, const OOBase::LocalString& strSystemId)
 {
-	OOBase::String path,file;
-	OOBase::Paths::SplitDirAndFilename(strBase.c_str(),path,file);
-	OOBase::Paths::AppendDirSeparator(path);
+	OOBase::LocalString path(strBase.get_allocator()),file(strBase.get_allocator());
+	split_dir_and_fname(strBase.c_str(),path,file);
+
 	path.append(strSystemId.c_str());
 	return path;
 }

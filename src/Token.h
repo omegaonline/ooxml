@@ -28,7 +28,7 @@
 class Token
 {
 public:
-	Token();
+	Token(OOBase::AllocatorInstance& allocator);
 	~Token();
 
 	bool empty() const;
@@ -38,15 +38,17 @@ public:
 
 	unsigned char pop();
 	const char* pop(size_t& len);
-	void pop(OOBase::String& str);
+	OOBase::LocalString pop_string();
 
 	void clear();
 
-	void rappend(const OOBase::String& str);
+	void rappend(const OOBase::LocalString& str);
 
 private:
 	Token(const Token&);
 	Token& operator = (const Token&);
+
+	OOBase::AllocatorInstance& m_allocator;
 
 	unsigned char* m_buffer;
 	size_t         m_alloc;

@@ -130,7 +130,7 @@ unsigned char UTF16BEDecoder::next(unsigned char c, bool& again)
 
 unsigned char EBCDICDecoder::next(unsigned char c, bool& again)
 {
-	static const char table[256] =
+	static const unsigned char table[256] =
 	{
 		0xFF,0x01,0x02,0x03,0xFF,0x09,0xFF,0x7F,0xFF,0xFF,0xFF,0x0B,0x0C,0x0D,0x0E,0x0F,
 		0x10,0x11,0x12,0x13,0xFF,0x85,0x08,0x00,0x18,0x19,0xFF,0xFF,0x1C,0x1D,0x1E,0x1F,
@@ -154,39 +154,28 @@ unsigned char EBCDICDecoder::next(unsigned char c, bool& again)
 	return table[c];
 }
 
-Decoder* Decoder::create(eType type)
+Decoder* Decoder::create(OOBase::AllocatorInstance& allocator, eType type)
 {
-	Decoder* ret = NULL;
 	switch (type)
 	{
 	case UTF32LE:
-		ret = new (std::nothrow) UTF32LEDecoder();
-		break;
+		return create_i<UTF32LEDecoder>(allocator);
 
 	case UTF32BE:
-		ret = new (std::nothrow) UTF32BEDecoder();
-		break;
+		return create_i<UTF32BEDecoder>(allocator);
 
 	case UTF16LE:
-		ret = new (std::nothrow) UTF16LEDecoder();
-		break;
+		return create_i<UTF16LEDecoder>(allocator);
 
 	case UTF16BE:
-		ret = new (std::nothrow) UTF16BEDecoder();
-		break;
+		return create_i<UTF16BEDecoder>(allocator);
 
 	case EBCDIC:
-		ret = new (std::nothrow) EBCDICDecoder();
-		break;
+		return create_i<EBCDICDecoder>(allocator);
 
 	case None:
 	default:
 		return NULL;
 	}
-
-	if (!ret)
-		throw "Out of memory";
-
-	return ret;
 }
 

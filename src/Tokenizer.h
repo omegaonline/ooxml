@@ -32,15 +32,15 @@ class IOState;
 
 // Callbacks
 
-OOBase::String resolve_url(const OOBase::String& strBase, const OOBase::String& strPublicId, const OOBase::String& strSystemId);
+OOBase::LocalString resolve_url(const OOBase::LocalString& strBase, const OOBase::LocalString& strPublicId, const OOBase::LocalString& strSystemId);
 
 class Tokenizer
 {
 public:
-	Tokenizer();
+	Tokenizer(OOBase::AllocatorInstance& allocator);
 	~Tokenizer();
 	
-	void load(const OOBase::String& fname);
+	void load(const OOBase::LocalString& fname);
 
 	enum TokenType
 	{
@@ -59,13 +59,20 @@ public:
 		CData = 12
 	};
 
-	TokenType next_token(OOBase::String& strToken, int verbose = 0);
+	TokenType next_token(OOBase::LocalString& strToken, int verbose = 0);
 	size_t get_column() const;
 	size_t get_line() const;
-	OOBase::String get_location() const;
+	OOBase::LocalString get_location() const;
 	unsigned int get_version() const;
 
+	OOBase::AllocatorInstance& get_allocator() const
+	{
+		return m_allocator;
+	}
+
 private:
+	OOBase::AllocatorInstance& m_allocator;
+
 	// Ragel members
 	int    m_cs;
 	int*   m_stack;
@@ -81,27 +88,39 @@ private:
 	Token m_public;
 	bool  m_internal_doctype;
 	bool  m_standalone;
-	OOBase::String m_strEncoding;
+	OOBase::LocalString m_strEncoding;
 
 	IOState* m_io;
 
-	OOBase::HashTable<OOBase::String,OOBase::String> m_int_param_entities;
+	OOBase::HashTable<OOBase::LocalString,OOBase::LocalString> m_int_param_entities;
 
 	struct InternalEntity
 	{
-		OOBase::String m_strValue;
-		bool           m_extern_decl;
+		InternalEntity(const OOBase::LocalString& strValue, bool extern_decl) :
+			m_strValue(strValue), m_extern_decl(extern_decl)
+		{}
+
+		OOBase::LocalString m_strValue;
+		bool                m_extern_decl;
 	};
-	OOBase::HashTable<OOBase::String,InternalEntity> m_int_gen_entities;
+	OOBase::HashTable<OOBase::LocalString,InternalEntity> m_int_gen_entities;
 
 	struct ExternalEntity
 	{
-		OOBase::String m_strPublicId;
-		OOBase::String m_strSystemId;
-		OOBase::String m_strNData;
+		ExternalEntity(const OOBase::LocalString& strPublicId, const OOBase::LocalString& strSystemId, const OOBase::LocalString& strNData) :
+			m_strPublicId(strPublicId), m_strSystemId(strSystemId), m_strNData(strNData)
+		{}
+
+		ExternalEntity(const OOBase::LocalString& strPublicId, const OOBase::LocalString& strSystemId) :
+			m_strPublicId(strPublicId), m_strSystemId(strSystemId), m_strNData(strSystemId.get_allocator())
+		{}
+
+		OOBase::LocalString m_strPublicId;
+		OOBase::LocalString m_strSystemId;
+		OOBase::LocalString m_strNData;
 	};
-	OOBase::HashTable<OOBase::String,ExternalEntity> m_ext_gen_entities;
-	OOBase::HashTable<OOBase::String,ExternalEntity> m_ext_param_entities;
+	OOBase::HashTable<OOBase::LocalString,ExternalEntity> m_ext_gen_entities;
+	OOBase::HashTable<OOBase::LocalString,ExternalEntity> m_ext_param_entities;
 		
 	// These are the private members used by Ragel
 	Tokenizer& operator ++ ()
@@ -119,11 +138,11 @@ private:
 
 	struct ParseState
 	{
-		OOBase::String& m_strToken;
+		OOBase::LocalString& m_strToken;
 		TokenType       m_type;
 		bool            m_halt;
 
-		ParseState(OOBase::String& t) :
+		ParseState(OOBase::LocalString& t) :
 			m_strToken(t),
 			m_type(Tokenizer::Error),
 			m_halt(false)
@@ -146,9 +165,9 @@ private:
 
 	void next_char();
 	void set_token(ParseState& pe, enum TokenType type, size_t offset = 0, bool allow_empty = true);
-	OOBase::String get_external_fname() const;
+	OOBase::LocalString get_external_fname() const;
 	void bypass_entity();
-	void check_entity_recurse(const OOBase::String& strEnt);
+	void check_entity_recurse(const OOBase::LocalString& strEnt);
 	void general_entity();
 	void param_entity();
 	bool subst_attr_entity();

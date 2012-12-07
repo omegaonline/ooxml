@@ -22,12 +22,21 @@
 #include "Tokenizer.h"
 #include "IOState.h"
 
-Tokenizer::Tokenizer() : 
-		m_stack(NULL), 
+Tokenizer::Tokenizer(OOBase::AllocatorInstance& allocator) :
+		m_allocator(allocator),
+		m_cs(0),
+		m_stack(NULL),
+		m_top(0),
 		m_stacksize(0),
 		m_char('\0'),
+		m_token(allocator),
+		m_entity_name(allocator),
+		m_entity(allocator),
+		m_system(allocator),
+		m_public(allocator),
 		m_internal_doctype(true),
 		m_standalone(false),
+		m_strEncoding(allocator),
 		m_io(NULL)
 {
 	struct predef
@@ -48,30 +57,27 @@ Tokenizer::Tokenizer() :
 
 	for (const predef* p = predefined;p->k != NULL;++p)
 	{
-		InternalEntity intern;
-		intern.m_extern_decl = false;
-
-		OOBase::String strKey;
+		OOBase::LocalString strKey(m_allocator),strValue(m_allocator);
 		int err = strKey.assign(p->k);
 		if (err == 0)
-			err = intern.m_strValue.assign(p->v);
+			err = strValue.assign(p->v);
 
 		if (err != 0)
 			throw "Out of memory";
 
-		m_int_gen_entities.insert(strKey,intern);
+		m_int_gen_entities.insert(strKey,InternalEntity(strValue,false));
 	}
 }
 
 Tokenizer::~Tokenizer()
 {
-	OOBase::HeapAllocator::free(m_stack);
+	m_allocator.free(m_stack);
 
 	while (m_io)
 		io_pop();
 }
 
-void Tokenizer::load(const OOBase::String& fname)
+void Tokenizer::load(const OOBase::LocalString& fname)
 {
 	while (m_io)
 		io_pop();
@@ -86,9 +92,7 @@ void Tokenizer::load(const OOBase::String& fname)
 
 	m_internal_doctype = true;
 
-	m_io = new (std::nothrow) IOState(fname);
-	if (!m_io)
-		throw "Out of memory";
+	m_io = IOState::create(m_allocator,fname);
 
 	m_io->init(m_strEncoding,m_standalone);
 
@@ -119,12 +123,12 @@ unsigned int Tokenizer::get_version() const
 		return 0;
 }
 
-OOBase::String Tokenizer::get_location() const
+OOBase::LocalString Tokenizer::get_location() const
 {
 	if (m_io)
 		return m_io->m_fname;
 	else
-		return OOBase::String();
+		return OOBase::LocalString(m_allocator);
 }
 
 void Tokenizer::pre_push()
@@ -132,14 +136,17 @@ void Tokenizer::pre_push()
 	if (!m_stack)
 	{
 		m_stacksize = 256;
-		m_stack = static_cast<int*>(OOBase::HeapAllocator::allocate(m_stacksize*sizeof(int)));
+		m_stack = static_cast<int*>(m_allocator.allocate(m_stacksize*sizeof(int),OOBase::alignof<int>::value));
 	}
 	else if (m_top == m_stacksize-1)
 	{
-		int* new_stack = static_cast<int*>(OOBase::HeapAllocator::reallocate(m_stack,m_stacksize*2*sizeof(int)));
+		int* new_stack = static_cast<int*>(m_allocator.reallocate(m_stack,m_stacksize*2*sizeof(int),OOBase::alignof<int>::value));
 		m_stack = new_stack;
 		m_stacksize *= 2;
 	}
+
+	if (!m_stack)
+		throw "Out of memory";
 }
 
 bool Tokenizer::operator == (const EndOfFile&) const
@@ -168,31 +175,18 @@ void Tokenizer::next_char()
 
 void Tokenizer::general_entity()
 {
-	OOBase::String strName,strVal,strSysLiteral;
-	m_entity_name.pop(strName);
-	m_system.pop(strSysLiteral);
-	m_token.pop(strVal);
-
+	OOBase::LocalString strSysLiteral = m_system.pop_string();
 	if (strSysLiteral.empty())
 	{
 		// Internal general entity
-		InternalEntity intern;
-		intern.m_strValue = strVal;
-		intern.m_extern_decl = !m_internal_doctype;
-
-		int err = m_int_gen_entities.insert(strName,intern);
+		int err = m_int_gen_entities.insert(m_entity_name.pop_string(),InternalEntity(m_token.pop_string(),!m_internal_doctype));
 		if (err != 0 && err != EEXIST)
 			throw "Out of memory";
 	}
 	else
 	{
 		// Unparsed entity or external parsed entity
-		ExternalEntity ext;
-		ext.m_strSystemId = strSysLiteral;
-		m_entity.pop(ext.m_strNData);
-		m_public.pop(ext.m_strPublicId);
-
-		int err = m_ext_gen_entities.insert(strName,ext);
+		int err = m_ext_gen_entities.insert(m_entity_name.pop_string(),ExternalEntity(m_entity.pop_string(),strSysLiteral,m_public.pop_string()));
 		if (err != 0 && err != EEXIST)
 			throw "Out of memory";
 	}
@@ -200,26 +194,18 @@ void Tokenizer::general_entity()
 
 void Tokenizer::param_entity()
 {
-	OOBase::String strName,strVal,strSysLiteral;
-	m_entity_name.pop(strName);
-	m_system.pop(strSysLiteral);
-	m_token.pop(strVal);
-
+	OOBase::LocalString strSysLiteral = m_system.pop_string();
 	if (strSysLiteral.empty())
 	{
 		// Internal parameter entity
-		int err = m_int_param_entities.insert(strName,strVal);
+		int err = m_int_param_entities.insert(m_entity_name.pop_string(),m_token.pop_string());
 		if (err != 0 && err != EEXIST)
 			throw "Out of memory";
 	}
 	else
 	{
 		// External parameter entity
-		ExternalEntity ext;
-		ext.m_strSystemId = strSysLiteral;
-		m_public.pop(ext.m_strPublicId);
-
-		int err = m_ext_param_entities.insert(strName,ext);
+		int err = m_ext_param_entities.insert(m_entity_name.pop_string(),ExternalEntity(m_public.pop_string(),strSysLiteral));
 		if (err != 0 && err != EEXIST)
 			throw "Out of memory";
 	}
@@ -227,8 +213,7 @@ void Tokenizer::param_entity()
 
 void Tokenizer::bypass_entity()
 {
-	OOBase::String strEnt;
-	m_entity.pop(strEnt);
+	OOBase::LocalString strEnt = m_entity.pop_string();
 
 	ExternalEntity* pExt = m_ext_gen_entities.find(strEnt);
 	if (pExt)
@@ -250,7 +235,7 @@ void Tokenizer::bypass_entity()
 	m_token.push(';');
 }
 
-void Tokenizer::check_entity_recurse(const OOBase::String& strEnt)
+void Tokenizer::check_entity_recurse(const OOBase::LocalString& strEnt)
 {
 	for (IOState* io = m_io;io != NULL; io=io->m_next)
 	{
@@ -259,19 +244,18 @@ void Tokenizer::check_entity_recurse(const OOBase::String& strEnt)
 	}
 }
 
-OOBase::String Tokenizer::get_external_fname() const
+OOBase::LocalString Tokenizer::get_external_fname() const
 {
 	IOState* io=m_io;
 	while (io != NULL && !io->is_file())
 		io = io->m_next;
 
-	return (io ? io->m_fname : OOBase::String());
+	return (io ? io->m_fname : OOBase::LocalString(m_allocator));
 }
 
 bool Tokenizer::subst_content_entity()
 {
-	OOBase::String strEnt;
-	m_entity.pop(strEnt);
+	OOBase::LocalString strEnt = m_entity.pop_string();
 
 	IOState* n = NULL;
 
@@ -283,7 +267,7 @@ bool Tokenizer::subst_content_entity()
 
 		if (!pInt->m_strValue.empty())
 		{
-			OOBase::String strFull;
+			OOBase::LocalString strFull(m_allocator);
 			int err = strFull.concat("&",strEnt.c_str());
 			if (err == 0)
 				err = strFull.append(";");
@@ -292,9 +276,7 @@ bool Tokenizer::subst_content_entity()
 
 			check_entity_recurse(strFull);
 
-			n = new (std::nothrow) IOState(strFull,get_version(),pInt->m_strValue);
-			if (!n)
-				throw "Out of memory";
+			n = IOState::create(m_allocator,strFull,get_version(),pInt->m_strValue);
 		}
 	}
 	else
@@ -309,14 +291,12 @@ bool Tokenizer::subst_content_entity()
 		if (!pExt->m_strNData.empty())
 			throw "WFC: Parsed Entity";
 
-		OOBase::String strExt = resolve_url(get_external_fname(),pExt->m_strPublicId,pExt->m_strSystemId);
+		OOBase::LocalString strExt = resolve_url(get_external_fname(),pExt->m_strPublicId,pExt->m_strSystemId);
 
 		check_entity_recurse(strExt);
 
 		// Start pulling from external source
-		n = new (std::nothrow) IOState(strExt,get_version());
-		if (!n)
-			throw "Out of memory";
+		n = IOState::create(m_allocator,strExt,get_version());
 
 		n->init();
 	}
@@ -332,8 +312,7 @@ bool Tokenizer::subst_content_entity()
 
 bool Tokenizer::subst_attr_entity()
 {
-	OOBase::String strEnt;
-	m_entity.pop(strEnt);
+	OOBase::LocalString strEnt = m_entity.pop_string();
 
 	InternalEntity* pInt = m_int_gen_entities.find(strEnt);
 	if (!pInt)
@@ -353,7 +332,7 @@ bool Tokenizer::subst_attr_entity()
 
 	if (!pInt->m_strValue.empty())
 	{
-		OOBase::String strFull;
+		OOBase::LocalString strFull(m_allocator);
 		int err = strFull.concat("&",strEnt.c_str());
 		if (err == 0)
 			err = strFull.append(";");
@@ -362,9 +341,7 @@ bool Tokenizer::subst_attr_entity()
 
 		check_entity_recurse(strFull);
 
-		IOState* n = new (std::nothrow) IOState(strFull,get_version(),pInt->m_strValue);
-		if (!n)
-			throw "Out of memory";
+		IOState* n = IOState::create(m_allocator,strFull,get_version(),pInt->m_strValue);
 
 		n->m_next = m_io;
 		m_io = n;
@@ -375,20 +352,19 @@ bool Tokenizer::subst_attr_entity()
 
 bool Tokenizer::subst_pentity()
 {
-	OOBase::String strEnt;
-	m_entity.pop(strEnt);
+	OOBase::LocalString strEnt = m_entity.pop_string();
 
 	IOState* n = NULL;
 
 	if (m_internal_doctype)
 		throw "WFC: PEs in Internal Subset";
 
-	OOBase::String* pInt = m_int_param_entities.find(strEnt);
+	OOBase::LocalString* pInt = m_int_param_entities.find(strEnt);
 	if (pInt)
 	{
 		if (!pInt->empty())
 		{
-			OOBase::String strFull;
+			OOBase::LocalString strFull(m_allocator);
 			int err = strFull.concat("%",strEnt.c_str());
 			if (err == 0)
 				err = strFull.append(";");
@@ -397,9 +373,7 @@ bool Tokenizer::subst_pentity()
 
 			check_entity_recurse(strFull);
 
-			n = new (std::nothrow) IOState(strFull,get_version(),*pInt);
-			if (!n)
-				throw "Out of memory";
+			n = IOState::create(m_allocator,strFull,get_version(),*pInt);
 		}
 	}
 	else
@@ -408,14 +382,12 @@ bool Tokenizer::subst_pentity()
 		if (!pExt)
 			throw "Unrecognized entity";
 
-		OOBase::String strExt = resolve_url(get_external_fname(),pExt->m_strPublicId,pExt->m_strSystemId);
+		OOBase::LocalString strExt = resolve_url(get_external_fname(),pExt->m_strPublicId,pExt->m_strSystemId);
 
 		check_entity_recurse(strExt);
 
 		// Start pulling from external source
-		n = new (std::nothrow) IOState(strExt,get_version());
-		if (!n)
-			throw "Out of memory";
+		n = IOState::create(m_allocator,strExt,get_version());
 
 		n->init();
 	}
@@ -431,15 +403,14 @@ bool Tokenizer::subst_pentity()
 
 void Tokenizer::include_pe(bool auto_pop)
 {
-	OOBase::String strEnt;
-	m_entity.pop(strEnt);
+	OOBase::LocalString strEnt = m_entity.pop_string();
 
 	IOState* n = NULL;
 
-	OOBase::String* pInt = m_int_param_entities.find(strEnt);
+	OOBase::LocalString* pInt = m_int_param_entities.find(strEnt);
 	if (pInt)
 	{
-		OOBase::String strFull;
+		OOBase::LocalString strFull(m_allocator);
 		int err = strFull.concat("%",strEnt.c_str());
 		if (err == 0)
 			err = strFull.append(";");
@@ -448,9 +419,7 @@ void Tokenizer::include_pe(bool auto_pop)
 
 		check_entity_recurse(strFull);
 
-		n = new (std::nothrow) IOState(strFull,get_version(),*pInt);
-		if (!n)
-			throw "Out of memory";
+		n = IOState::create(m_allocator,strFull,get_version(),*pInt);
 
 		n->m_auto_pop = auto_pop;
 	}
@@ -460,14 +429,12 @@ void Tokenizer::include_pe(bool auto_pop)
 		if (!pExt)
 			throw "Unrecognized entity";
 
-		OOBase::String strExt = resolve_url(get_external_fname(),pExt->m_strPublicId,pExt->m_strSystemId);
+		OOBase::LocalString strExt = resolve_url(get_external_fname(),pExt->m_strPublicId,pExt->m_strSystemId);
 
 		check_entity_recurse(strExt);
 
 		// Start pulling from external source
-		n = new (std::nothrow) IOState(strExt,get_version());
-		if (!n)
-			throw "Out of memory";
+		n = IOState::create(m_allocator,strExt,get_version());
 
 		n->init();
 		n->m_auto_pop = auto_pop;
@@ -488,10 +455,7 @@ void Tokenizer::include_pe(bool auto_pop)
 
 void Tokenizer::subst_char(int base)
 {
-	OOBase::String strEntity;
-	m_entity.pop(strEntity);
-
-	unsigned long v = strtoul(strEntity.c_str(),NULL,base);
+	unsigned long v = strtoul(m_entity.pop_string().c_str(),NULL,base);
 
 	// Check for Char
 	if (get_version() == 1)
@@ -556,14 +520,8 @@ void Tokenizer::set_token(ParseState& pe, enum TokenType type, size_t offset, bo
 
 void Tokenizer::external_doctype()
 {
-	OOBase::String strSystemId;
-	m_system.pop(strSystemId);
-
-	OOBase::String strPublicId;
-	m_public.pop(strPublicId);
-
 	// We cheat and use m_next here
-	m_io->m_next = new (std::nothrow) IOState(resolve_url(m_io->m_fname,strPublicId,strSystemId),get_version());
+	m_io->m_next = IOState::create(m_allocator,resolve_url(m_io->m_fname,m_public.pop_string(),m_system.pop_string()),get_version());
 	if (!m_io->m_next)
 		throw "Out of memory";
 
@@ -595,6 +553,6 @@ void Tokenizer::io_pop()
 		IOState* n = m_io;
 		m_io = m_io->m_next;
 		n->m_next = NULL;
-		delete n;
+		n->destroy();
 	}
 }

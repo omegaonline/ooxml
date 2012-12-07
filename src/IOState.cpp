@@ -21,38 +21,74 @@
 
 #include "IOState.h"
 
-IOState::IOState(const OOBase::String& fname, unsigned int version) :
+IOState* IOState::create(OOBase::AllocatorInstance& allocator, const OOBase::LocalString& fname, unsigned int version)
+{
+	void* p = allocator.allocate(sizeof(IOState),OOBase::alignof<IOState>::value);
+	if (!p)
+		throw "Out of memory";
+
+	return ::new (p) IOState(allocator,fname,version);
+}
+
+IOState* IOState::create(OOBase::AllocatorInstance& allocator, const OOBase::LocalString& entity_name, unsigned int version, const OOBase::LocalString& repl_text)
+{
+	void* p = allocator.allocate(sizeof(IOState),OOBase::alignof<IOState>::value);
+	if (!p)
+		throw "Out of memory";
+
+	return ::new (p) IOState(allocator,entity_name,version,repl_text);
+}
+
+void IOState::destroy()
+{
+	OOBase::AllocatorInstance& a = m_allocator;
+	this->~IOState();
+	a.free(this);
+}
+
+IOState::IOState(OOBase::AllocatorInstance& allocator, const OOBase::LocalString& fname, unsigned int version) :
 		m_fname(fname),
 		m_col(0),
 		m_line(1),
 		m_next(NULL),
 		m_auto_pop(false),
+		m_cs(0),
+		m_char('\0'),
+		m_allocator(allocator),
 		m_decoder(NULL),
 		m_decoder_type(Decoder::None),
-		m_io(new (std::nothrow) IO()),
+		m_io(NULL),
 		m_eof(false),
 		m_preinit(true),
+		m_input(allocator),
 		m_version(version)
 {
-	if (!m_io)
+	void* p = allocator.allocate(sizeof(IO),OOBase::alignof<IO>::value);
+	if (!p)
 		throw "Out of memory";
+
+	m_io = new (p) IO();
 
 	int err = m_io->open(fname.c_str());
 	if (err != 0)
 		throw "IO Error";
 }
 
-IOState::IOState(const OOBase::String& entity_name, unsigned int version, const OOBase::String& repl_text) :
+IOState::IOState(OOBase::AllocatorInstance& allocator, const OOBase::LocalString& entity_name, unsigned int version, const OOBase::LocalString& repl_text) :
 		m_fname(entity_name),
 		m_col(0),
 		m_line(1),
 		m_next(NULL),
 		m_auto_pop(false),
+		m_cs(0),
+		m_char('\0'),
+		m_allocator(allocator),
 		m_decoder(NULL),
 		m_decoder_type(Decoder::None),
 		m_io(NULL),
 		m_eof(repl_text.empty()),
 		m_preinit(true),
+		m_input(allocator),
 		m_version(version)
 {
 	m_input.rappend(repl_text);
@@ -60,19 +96,26 @@ IOState::IOState(const OOBase::String& entity_name, unsigned int version, const 
 
 IOState::~IOState()
 {
-	delete m_decoder;
-	delete m_io;
-	delete m_next;
+	Decoder::destroy(m_allocator,m_decoder);
+
+	if (m_io)
+	{
+		m_io->~IO();
+		m_allocator.free(m_io);
+	}
+
+	if (m_next)
+		m_next->destroy();
 }
 
-void IOState::init(OOBase::String& strEncoding, bool& standalone)
+void IOState::init(OOBase::LocalString& strEncoding, bool& standalone)
 {
 	init(false,strEncoding,standalone);
 }
 
 void IOState::init()
 {
-	OOBase::String strEncoding;
+	OOBase::LocalString strEncoding(m_allocator);
 	bool standalone;
 	init(true,strEncoding,standalone);
 }
@@ -81,19 +124,18 @@ void IOState::set_decoder(Decoder::eType type)
 {
 	if (m_decoder_type != type)
 	{
-		delete m_decoder;
-		m_decoder = Decoder::create(type);
+		Decoder::destroy(m_allocator,m_decoder);
+		m_decoder = Decoder::create(m_allocator,type);
 		m_decoder_type = type;
 	}
 }
 
-void IOState::set_encoding(Token& token, OOBase::String& str)
+void IOState::set_encoding(Token& token, OOBase::LocalString& str)
 {
-	set_decoder(Decoder::None);
-	token.pop(str);
+	str = token.pop_string();
 }
 
-void IOState::switch_encoding(OOBase::String& strEncoding)
+void IOState::switch_encoding(OOBase::LocalString& strEncoding)
 {
 	if (strEncoding.empty())
 	{
@@ -123,7 +165,7 @@ void IOState::switch_encoding(OOBase::String& strEncoding)
 	}
 
 	if (strEncoding != "UTF-8" && strEncoding != "utf-8" && strEncoding != "UTF8" && strEncoding != "utf8")
-		printf("NO ENCODER FOR %s - WILL FAIL! ",strEncoding.c_str());
+		printf("NO DECODER FOR %s - WILL FAIL! ",strEncoding.c_str());
 }
 
 unsigned char IOState::get_char(bool& from_input)
@@ -237,7 +279,7 @@ unsigned char IOState::next_char()
 	return c;
 }
 
-void IOState::rappend(const OOBase::String& str)
+void IOState::rappend(const OOBase::LocalString& str)
 {
 	m_input.rappend(str);
 }
@@ -249,10 +291,7 @@ bool IOState::is_eof() const
 
 void IOState::set_version(Token& token)
 {
-	OOBase::String str;
-	token.pop(str);
-
-	unsigned long version = strtoul(str.c_str(),NULL,10);
+	unsigned long version = strtoul(token.pop_string().c_str(),NULL,10);
 
 	if (m_version == (unsigned int)-1)
 		m_version = version;

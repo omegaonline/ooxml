@@ -37,16 +37,38 @@ public:
 		EBCDIC
 	};
 
-	static Decoder* create(eType type);
+	static Decoder* create(OOBase::AllocatorInstance& allocator, eType type);
+
+	template <typename T>
+	static void destroy(OOBase::AllocatorInstance& allocator, T*& p)
+	{
+		if (p)
+		{
+			p->~T();
+			allocator.free(p);
+			p = NULL;
+		}
+	}
 
 	virtual unsigned char next(unsigned char c, bool& again) = 0;
 
 protected:
+	virtual ~Decoder() {};
 	Decoder() {}
 
 private:
 	Decoder(const Decoder&);
 	Decoder& operator =(const Decoder&);
+
+	template <typename T>
+	static T* create_i(OOBase::AllocatorInstance& allocator)
+	{
+		void* p = allocator.allocate(sizeof(T),OOBase::alignof<T>::value);
+		if (!p)
+			throw "Out of memory";
+
+		return ::new (p) T();
+	}
 };
 
 

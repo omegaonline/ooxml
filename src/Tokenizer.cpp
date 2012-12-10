@@ -37,7 +37,11 @@ Tokenizer::Tokenizer(OOBase::AllocatorInstance& allocator) :
 		m_internal_doctype(true),
 		m_standalone(false),
 		m_strEncoding(allocator),
-		m_io(NULL)
+		m_io(NULL),
+		m_int_param_entities(allocator),
+		m_int_gen_entities(allocator),
+		m_ext_gen_entities(allocator),
+		m_ext_param_entities(allocator)
 {
 	struct predef
 	{

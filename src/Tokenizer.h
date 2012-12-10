@@ -92,7 +92,7 @@ private:
 
 	IOState* m_io;
 
-	OOBase::HashTable<OOBase::LocalString,OOBase::LocalString> m_int_param_entities;
+	OOBase::HashTable<OOBase::LocalString,OOBase::LocalString,OOBase::AllocatorInstance> m_int_param_entities;
 
 	struct InternalEntity
 	{
@@ -103,7 +103,7 @@ private:
 		OOBase::LocalString m_strValue;
 		bool                m_extern_decl;
 	};
-	OOBase::HashTable<OOBase::LocalString,InternalEntity> m_int_gen_entities;
+	OOBase::HashTable<OOBase::LocalString,InternalEntity,OOBase::AllocatorInstance> m_int_gen_entities;
 
 	struct ExternalEntity
 	{
@@ -119,8 +119,8 @@ private:
 		OOBase::LocalString m_strSystemId;
 		OOBase::LocalString m_strNData;
 	};
-	OOBase::HashTable<OOBase::LocalString,ExternalEntity> m_ext_gen_entities;
-	OOBase::HashTable<OOBase::LocalString,ExternalEntity> m_ext_param_entities;
+	OOBase::HashTable<OOBase::LocalString,ExternalEntity,OOBase::AllocatorInstance> m_ext_gen_entities;
+	OOBase::HashTable<OOBase::LocalString,ExternalEntity,OOBase::AllocatorInstance> m_ext_param_entities;
 		
 	// These are the private members used by Ragel
 	Tokenizer& operator ++ ()

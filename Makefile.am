@@ -2,8 +2,6 @@ include @top_srcdir@/m4/ltrc.inc
 
 ACLOCAL_AMFLAGS = -I m4
 
-SUBDIRS = oobase .
-
 EXTRA_DIST = \
 	lgpl3_0.txt
 
@@ -49,7 +47,7 @@ dist-hook:
 	$(AM_V_at)$(MKDIR_P) $(@D)
 	$(AM_V_GEN)$(RAGEL) -C -G2 -o $@ $<
 	
-AM_CPPFLAGS = -I@top_srcdir@/oobase/include -I@top_builddir@/oobase/include
+AM_CPPFLAGS = -I@top_srcdir@/../oobase/include -I@top_builddir@/../oobase/include
 AM_CFLAGS = $(PTHREAD_CFLAGS)
 AM_CXXFLAGS = $(PTHREAD_CFLAGS)
 AM_LDFLAGS = $(PTHREAD_LIBS)
@@ -82,7 +80,7 @@ ooxml_SOURCES = \
 #ooxml_la_CXXFLAGS = $(INCICONV)
 #ooxml_la_LDFLAGS = -module -no-undefined
 
-ooxml_LDADD = @top_builddir@/oobase/liboobase.la 
+ooxml_LDADD = @top_builddir@/../oobase/liboobase.la 
 
 if WIN32
 

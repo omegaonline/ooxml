@@ -6,7 +6,6 @@ AC_CONFIG_HEADERS([autoheader_dummy.h])
 
 AC_CONFIG_AUX_DIR([build-aux])
 AC_CONFIG_MACRO_DIR([m4])
-AC_CONFIG_SUBDIRS([oobase])
 AC_CONFIG_FILES([Makefile])
 
 AM_INIT_AUTOMAKE([foreign 1.10 no-define])
@@ -34,15 +33,12 @@ AM_CONDITIONAL([DEBUG], [test "x$debug" = "xtrue"])
 OO_PROG_CC
 OO_PROG_CXX
 
-# Check the multi-threading flags
-OO_MULTI_THREAD
-
 # Set sensible default CFLAGS if necessary
 AS_IF([test "x$oo_test_CFLAGS" != "xset"],
 [
   # Always try to hide symbols
   AX_CFLAGS_GCC_OPTION([-fvisibility=hidden])
-  
+
   AS_IF([test "x$debug" = "xtrue"],
   [
     AX_CFLAGS_GCC_OPTION([-ggdb])
@@ -51,15 +47,15 @@ AS_IF([test "x$oo_test_CFLAGS" != "xset"],
   [
     AX_CFLAGS_GCC_OPTION([-O2])
   ])
-  
+
   AX_CFLAGS_GCC_OPTION([-pipe])
-    
+
   AS_CASE([$host_os],[mingw*],
   [
     AX_CFLAGS_GCC_OPTION([-march=i686])
     AX_CFLAGS_GCC_OPTION([-mtune=native])
-	
-	AX_CFLAGS_GCC_OPTION([-static-libgcc])	
+
+	AX_CFLAGS_GCC_OPTION([-static-libgcc])
   ])
 ])
 
@@ -69,7 +65,8 @@ AS_IF([test "x$oo_test_CXXFLAGS" != "xset"],
   # Always try to hide symbols
   AX_CXXFLAGS_GCC_OPTION([-fvisibility=hidden])
   AX_CXXFLAGS_GCC_OPTION([-fno-rtti])
-  
+  #AX_CXXFLAGS_GCC_OPTION([-fno-exceptions])
+
   # Always add full warnings
   AX_CXXFLAGS_WARN_ALL
 
@@ -81,29 +78,33 @@ AS_IF([test "x$oo_test_CXXFLAGS" != "xset"],
   [
     AX_CXXFLAGS_GCC_OPTION([-O2])
   ])
-  
+
   AX_CXXFLAGS_GCC_OPTION([-pipe])
-  
+
   AS_CASE([$host_os],[mingw*],
   [
     AX_CXXFLAGS_GCC_OPTION([-march=i686])
     AX_CXXFLAGS_GCC_OPTION([-mtune=native])
-	
+
 	AX_CXXFLAGS_GCC_OPTION([-static-libgcc])
 	AX_CXXFLAGS_GCC_OPTION([-static-libstdc++])
   ])
 ])
 
 # Add debug defines
-AS_IF([test "x$debug" != "xtrue"],[CPPFLAGS="$CPPFLAGS -DNDEBUG"])
+AS_IF([test "x$debug" = "xtrue"],[CPPFLAGS="$CPPFLAGS -D_DEBUG"],[CPPFLAGS="$CPPFLAGS -DNDEBUG"])
+
+# Check the multi-threading flags
+OO_MULTI_THREAD
+
+AC_CHECK_TOOL([RAGEL],[ragel],[])
+AS_IF([test "x$RAGEL" == "x"],[AC_MSG_ERROR([Need ragel command])])
 
 # Set up libtool correctly
 m4_ifdef([LT_PREREQ],,[AC_MSG_ERROR([Need libtool version 2.2.6 or later])])
 LT_PREREQ([2.2.6])
-LT_INIT([win32-dll disable-static])
-LT_LANG([Windows Resource])
-
-AC_CHECK_TOOL([RAGEL],[ragel],[])
-AS_IF([test "x$RAGEL" == "x"],[AC_MSG_ERROR([Need ragel command])])
+LT_CONFIG_LTDL_DIR([libltdl])
+LT_INIT([dlopen])
+LTDL_INIT
 
 AC_OUTPUT

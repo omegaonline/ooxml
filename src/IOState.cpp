@@ -23,7 +23,7 @@
 
 IOState* IOState::create(OOBase::AllocatorInstance& allocator, const OOBase::LocalString& fname, unsigned int version)
 {
-	void* p = allocator.allocate(sizeof(IOState),OOBase::alignof<IOState>::value);
+	void* p = allocator.allocate(sizeof(IOState),OOBase::alignment_of<IOState>::value);
 	if (!p)
 		throw "Out of memory";
 
@@ -32,7 +32,7 @@ IOState* IOState::create(OOBase::AllocatorInstance& allocator, const OOBase::Loc
 
 IOState* IOState::create(OOBase::AllocatorInstance& allocator, const OOBase::LocalString& entity_name, unsigned int version, const OOBase::LocalString& repl_text)
 {
-	void* p = allocator.allocate(sizeof(IOState),OOBase::alignof<IOState>::value);
+	void* p = allocator.allocate(sizeof(IOState),OOBase::alignment_of<IOState>::value);
 	if (!p)
 		throw "Out of memory";
 
@@ -63,7 +63,7 @@ IOState::IOState(OOBase::AllocatorInstance& allocator, const OOBase::LocalString
 		m_input(allocator),
 		m_version(version)
 {
-	void* p = allocator.allocate(sizeof(IO),OOBase::alignof<IO>::value);
+	void* p = allocator.allocate(sizeof(IO),OOBase::alignment_of<IO>::value);
 	if (!p)
 		throw "Out of memory";
 

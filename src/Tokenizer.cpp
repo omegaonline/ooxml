@@ -140,11 +140,11 @@ void Tokenizer::pre_push()
 	if (!m_stack)
 	{
 		m_stacksize = 256;
-		m_stack = static_cast<int*>(m_allocator.allocate(m_stacksize*sizeof(int),OOBase::alignof<int>::value));
+		m_stack = static_cast<int*>(m_allocator.allocate(m_stacksize*sizeof(int),OOBase::alignment_of<int>::value));
 	}
 	else if (m_top == m_stacksize-1)
 	{
-		int* new_stack = static_cast<int*>(m_allocator.reallocate(m_stack,m_stacksize*2*sizeof(int),OOBase::alignof<int>::value));
+		int* new_stack = static_cast<int*>(m_allocator.reallocate(m_stack,m_stacksize*2*sizeof(int),OOBase::alignment_of<int>::value));
 		m_stack = new_stack;
 		m_stacksize *= 2;
 	}
@@ -219,10 +219,10 @@ void Tokenizer::bypass_entity()
 {
 	OOBase::LocalString strEnt = m_entity.pop_string();
 
-	ExternalEntity* pExt = m_ext_gen_entities.find(strEnt);
-	if (pExt)
+	OOBase::HashTable<OOBase::LocalString,ExternalEntity,OOBase::AllocatorInstance>::iterator i = m_ext_gen_entities.find(strEnt);
+	if (i != m_ext_gen_entities.end())
 	{
-		if (!pExt->m_strNData.empty())
+		if (!i->value.m_strNData.empty())
 			throw "Unparsed entity reference in entity value";
 
 		if (m_standalone)
@@ -263,13 +263,13 @@ bool Tokenizer::subst_content_entity()
 
 	IOState* n = NULL;
 
-	InternalEntity* pInt = m_int_gen_entities.find(strEnt);
-	if (pInt)
+	OOBase::HashTable<OOBase::LocalString,InternalEntity,OOBase::AllocatorInstance>::iterator internal = m_int_gen_entities.find(strEnt);
+	if (internal != m_int_gen_entities.end())
 	{
-		if (m_standalone && pInt->m_extern_decl)
+		if (m_standalone && internal->value.m_extern_decl)
 			throw "VC: External in standalone document";
 
-		if (!pInt->m_strValue.empty())
+		if (!internal->value.m_strValue.empty())
 		{
 			OOBase::LocalString strFull(m_allocator);
 			int err = strFull.concat("&",strEnt.c_str());
@@ -280,22 +280,22 @@ bool Tokenizer::subst_content_entity()
 
 			check_entity_recurse(strFull);
 
-			n = IOState::create(m_allocator,strFull,get_version(),pInt->m_strValue);
+			n = IOState::create(m_allocator,strFull,get_version(),internal->value.m_strValue);
 		}
 	}
 	else
 	{
-		ExternalEntity* pExt = m_ext_gen_entities.find(strEnt);
-		if (!pExt)
+		OOBase::HashTable<OOBase::LocalString,ExternalEntity,OOBase::AllocatorInstance>::iterator external = m_ext_gen_entities.find(strEnt);
+		if (external == m_ext_gen_entities.end())
 			throw "WFC: Entity Declared";
 
 		if (m_standalone) // validity error only
 			throw "VC: External in standalone document";
 
-		if (!pExt->m_strNData.empty())
+		if (!external->value.m_strNData.empty())
 			throw "WFC: Parsed Entity";
 
-		OOBase::LocalString strExt = resolve_url(get_external_fname(),pExt->m_strPublicId,pExt->m_strSystemId);
+		OOBase::LocalString strExt = resolve_url(get_external_fname(),external->value.m_strPublicId,external->value.m_strSystemId);
 
 		check_entity_recurse(strExt);
 
@@ -318,10 +318,10 @@ bool Tokenizer::subst_attr_entity()
 {
 	OOBase::LocalString strEnt = m_entity.pop_string();
 
-	InternalEntity* pInt = m_int_gen_entities.find(strEnt);
-	if (!pInt)
+	OOBase::HashTable<OOBase::LocalString,InternalEntity,OOBase::AllocatorInstance>::iterator i = m_int_gen_entities.find(strEnt);
+	if (i == m_int_gen_entities.end())
 	{
-		if (m_ext_param_entities.find(strEnt) != NULL)
+		if (m_ext_param_entities.find(strEnt) != m_ext_param_entities.end())
 			throw "WFC: No External Entity References";
 
 		//if (m_standalone)
@@ -331,10 +331,10 @@ bool Tokenizer::subst_attr_entity()
 		//return false;
 	}
 
-	if (m_standalone && pInt->m_extern_decl)
+	if (m_standalone && i->value.m_extern_decl)
 		throw "WFC: Entity Declared";
 
-	if (!pInt->m_strValue.empty())
+	if (!i->value.m_strValue.empty())
 	{
 		OOBase::LocalString strFull(m_allocator);
 		int err = strFull.concat("&",strEnt.c_str());
@@ -345,13 +345,13 @@ bool Tokenizer::subst_attr_entity()
 
 		check_entity_recurse(strFull);
 
-		IOState* n = IOState::create(m_allocator,strFull,get_version(),pInt->m_strValue);
+		IOState* n = IOState::create(m_allocator,strFull,get_version(),i->value.m_strValue);
 
 		n->m_next = m_io;
 		m_io = n;
 	}
 
-	return (!pInt->m_strValue.empty());
+	return (!i->value.m_strValue.empty());
 }
 
 bool Tokenizer::subst_pentity()
@@ -363,10 +363,10 @@ bool Tokenizer::subst_pentity()
 	if (m_internal_doctype)
 		throw "WFC: PEs in Internal Subset";
 
-	OOBase::LocalString* pInt = m_int_param_entities.find(strEnt);
-	if (pInt)
+	OOBase::HashTable<OOBase::LocalString,OOBase::LocalString,OOBase::AllocatorInstance>::iterator internal = m_int_param_entities.find(strEnt);
+	if (internal != m_int_param_entities.end())
 	{
-		if (!pInt->empty())
+		if (!internal->value.empty())
 		{
 			OOBase::LocalString strFull(m_allocator);
 			int err = strFull.concat("%",strEnt.c_str());
@@ -377,16 +377,16 @@ bool Tokenizer::subst_pentity()
 
 			check_entity_recurse(strFull);
 
-			n = IOState::create(m_allocator,strFull,get_version(),*pInt);
+			n = IOState::create(m_allocator,strFull,get_version(),internal->value);
 		}
 	}
 	else
 	{
-		ExternalEntity* pExt = m_ext_param_entities.find(strEnt);
-		if (!pExt)
+		OOBase::HashTable<OOBase::LocalString,ExternalEntity,OOBase::AllocatorInstance>::iterator external = m_ext_param_entities.find(strEnt);
+		if (external == m_ext_param_entities.end())
 			throw "Unrecognized entity";
 
-		OOBase::LocalString strExt = resolve_url(get_external_fname(),pExt->m_strPublicId,pExt->m_strSystemId);
+		OOBase::LocalString strExt = resolve_url(get_external_fname(),external->value.m_strPublicId,external->value.m_strSystemId);
 
 		check_entity_recurse(strExt);
 
@@ -411,8 +411,8 @@ void Tokenizer::include_pe(bool auto_pop)
 
 	IOState* n = NULL;
 
-	OOBase::LocalString* pInt = m_int_param_entities.find(strEnt);
-	if (pInt)
+	OOBase::HashTable<OOBase::LocalString,OOBase::LocalString,OOBase::AllocatorInstance>::iterator internal = m_int_param_entities.find(strEnt);
+	if (internal != m_int_param_entities.end())
 	{
 		OOBase::LocalString strFull(m_allocator);
 		int err = strFull.concat("%",strEnt.c_str());
@@ -423,17 +423,17 @@ void Tokenizer::include_pe(bool auto_pop)
 
 		check_entity_recurse(strFull);
 
-		n = IOState::create(m_allocator,strFull,get_version(),*pInt);
+		n = IOState::create(m_allocator,strFull,get_version(),internal->value);
 
 		n->m_auto_pop = auto_pop;
 	}
 	else
 	{
-		ExternalEntity* pExt = m_ext_param_entities.find(strEnt);
-		if (!pExt)
+		OOBase::HashTable<OOBase::LocalString,ExternalEntity,OOBase::AllocatorInstance>::iterator external = m_ext_param_entities.find(strEnt);
+		if (external == m_ext_param_entities.end())
 			throw "Unrecognized entity";
 
-		OOBase::LocalString strExt = resolve_url(get_external_fname(),pExt->m_strPublicId,pExt->m_strSystemId);
+		OOBase::LocalString strExt = resolve_url(get_external_fname(),external->value.m_strPublicId,external->value.m_strSystemId);
 
 		check_entity_recurse(strExt);
 

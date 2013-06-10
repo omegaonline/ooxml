@@ -57,7 +57,7 @@
 	
 }%%
 
-#include "../src/IOState.h"
+#include "src/IOState.h"
 
 // Ragel does silly things with signed and unsigned short
 #define short unsigned short

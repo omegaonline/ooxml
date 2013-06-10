@@ -22,7 +22,7 @@
 #ifndef DECODER_H_INCLUDED_
 #define DECODER_H_INCLUDED_
 
-#include <OOBase/GlobalNew.h>
+#include <OOBase/Memory.h>
 
 class Decoder
 {
@@ -63,7 +63,7 @@ private:
 	template <typename T>
 	static T* create_i(OOBase::AllocatorInstance& allocator)
 	{
-		void* p = allocator.allocate(sizeof(T),OOBase::alignof<T>::value);
+		void* p = allocator.allocate(sizeof(T),OOBase::alignment_of<T>::value);
 		if (!p)
 			throw "Out of memory";
 

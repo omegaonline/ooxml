@@ -22,7 +22,7 @@
 #ifndef IOSTATE_H_INCLUDED_
 #define IOSTATE_H_INCLUDED_
 
-#include <OOBase/GlobalNew.h>
+#include <OOBase/Memory.h>
 
 #include "Token.h"
 #include "Decoder.h"

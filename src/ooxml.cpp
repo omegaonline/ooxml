@@ -21,7 +21,7 @@
 
 #include "Tokenizer.h"
 
-#include <OOBase/Stack.h>
+#include <OOBase/Vector.h>
 #include <OOBase/ArenaAllocator.h>
 #include <OOBase/Set.h>
 
@@ -32,7 +32,7 @@ static const int verbose = 0;
 
 static bool do_wf_test(OOBase::AllocatorInstance& allocator, const OOBase::LocalString& strURI, bool fail_expected)
 {
-	OOBase::Stack<OOBase::LocalString,OOBase::AllocatorInstance> elements(allocator);
+	OOBase::Vector<OOBase::LocalString,OOBase::AllocatorInstance> elements(allocator);
 	OOBase::Set<OOBase::LocalString,OOBase::AllocatorInstance> attributes(allocator);
 
 	Tokenizer tok(allocator);
@@ -47,7 +47,7 @@ static bool do_wf_test(OOBase::AllocatorInstance& allocator, const OOBase::Local
 
 		if (tok_type == Tokenizer::ElementStart)
 		{
-			elements.push(strToken);
+			elements.push_back(strToken);
 			attributes.clear();
 		}
 		else if (tok_type == Tokenizer::AttributeName)
@@ -60,7 +60,7 @@ static bool do_wf_test(OOBase::AllocatorInstance& allocator, const OOBase::Local
 		else if (tok_type == Tokenizer::ElementEnd)
 		{
 			OOBase::LocalString strE(allocator);
-			elements.pop(&strE);
+			elements.pop_back(&strE);
 
 			if (!strToken.empty() && strE != strToken)
 				return false;
@@ -76,7 +76,7 @@ static bool do_wf_test(OOBase::AllocatorInstance& allocator, const OOBase::Local
 
 static bool do_valid_test(OOBase::AllocatorInstance& allocator, const OOBase::LocalString& strURI, bool fail_expected)
 {
-	OOBase::Stack<OOBase::LocalString,OOBase::AllocatorInstance> elements(allocator);
+	OOBase::Vector<OOBase::LocalString,OOBase::AllocatorInstance> elements(allocator);
 	OOBase::Set<OOBase::LocalString,OOBase::AllocatorInstance> attributes(allocator);
 	OOBase::LocalString strDocType(allocator);
 	bool root = true;
@@ -116,7 +116,7 @@ static bool do_valid_test(OOBase::AllocatorInstance& allocator, const OOBase::Lo
 				root = false;
 			}
 
-			elements.push(strToken);
+			elements.push_back(strToken);
 			attributes.clear();
 		}
 		else if (tok_type == Tokenizer::AttributeName)
@@ -129,7 +129,7 @@ static bool do_valid_test(OOBase::AllocatorInstance& allocator, const OOBase::Lo
 		else if (tok_type == Tokenizer::ElementEnd)
 		{
 			OOBase::LocalString strE(allocator);
-			elements.pop(&strE);
+			elements.pop_back(&strE);
 
 			if (!strToken.empty() && strE != strToken)
 				return false;

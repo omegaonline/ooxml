@@ -22,7 +22,6 @@
 #ifndef TOKEN_H_INCLUDED_
 #define TOKEN_H_INCLUDED_
 
-#include <OOBase/GlobalNew.h>
 #include <OOBase/String.h>
 
 class Token

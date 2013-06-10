@@ -22,7 +22,6 @@
 #ifndef TOKENIZER_H_INCLUDED_
 #define TOKENIZER_H_INCLUDED_
 
-#include <OOBase/GlobalNew.h>
 #include <OOBase/String.h>
 #include <OOBase/HashTable.h>
 

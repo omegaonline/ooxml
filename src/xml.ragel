@@ -196,7 +196,7 @@
 	main := document;
 }%%
 
-#include "../src/Tokenizer.h"
+#include "src/Tokenizer.h"
 
 // Ragel does silly things with signed and unsigned short
 #define short unsigned short

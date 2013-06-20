@@ -103,8 +103,6 @@ AS_IF([test "x$RAGEL" == "x"],[AC_MSG_ERROR([Need ragel command])])
 # Set up libtool correctly
 m4_ifdef([LT_PREREQ],,[AC_MSG_ERROR([Need libtool version 2.2.6 or later])])
 LT_PREREQ([2.2.6])
-LT_CONFIG_LTDL_DIR([libltdl])
-LT_INIT([dlopen])
-LTDL_INIT
+LT_INIT()
 
 AC_OUTPUT

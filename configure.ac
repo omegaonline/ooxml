@@ -97,7 +97,7 @@ AS_IF([test "x$debug" = "xtrue"],[CPPFLAGS="$CPPFLAGS -D_DEBUG"],[CPPFLAGS="$CPP
 # Check the multi-threading flags
 OO_MULTI_THREAD
 
-AC_CHECK_TOOL([RAGEL],[ragel],[])
+AC_PATH_PROG([RAGEL],[ragel])
 AS_IF([test "x$RAGEL" == "x"],[AC_MSG_ERROR([Need ragel command])])
 
 # Set up libtool correctly
